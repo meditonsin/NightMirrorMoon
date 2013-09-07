@@ -102,7 +102,12 @@ sub get_da {
 
    if ( $r->responseCode == 200 ) {
       my $response = from_json( $r->responseContent );
-      return $response->{url};
+      if ( $response->{type} eq "link" ) {
+         return $response->{fullsize_url};
+      } elsif ( $response->{type} eq "photo" ) {
+         return $response->{url};
+      }
+      return undef;
    }
    return undef;
 }
@@ -131,6 +136,21 @@ sub make_mirror {
       return $response;
    }
    return undef;
+}
+
+#
+# Delete imgur mirror
+#
+sub delete_mirror {
+   my $r = shift;
+   my $dhash = shift;
+
+   $r->request( "DELETE", "/3/image/$dhash" );
+
+   if ( $r->responseCode == 200 ) {
+      return 1;
+   }
+   #die "Couldn't delete mirror $dhash (".$response->{data}->{error}.")";
 }
 
 #
@@ -213,14 +233,16 @@ foreach my $post ( @{get_reddit( $reddit, "/r/mylittlepony/new/.json" )->{data}-
    }
 
    # Make a mirror
-   my $mirror = make_mirror( $post->{data}->{url} );
+   my $mirror = make_mirror( $imgur, $deviantart, $post->{data}->{url} );
    if ( ! $mirror ) { 
       $errors = 1;
       next;
    }
 
    # Make comment in submission post
-   if ( ! make_reddit_comment( $reddit, $post->{data}->{name}, $mirror->{id} ) ) {
+   if ( ! make_reddit_comment( $reddit, $post->{data}->{name}, $mirror->{data}->{id} ) ) {
+      # Don't leave the now useless mirror up
+      delete_mirror( $imgur, $mirror->{data}->{deletehash} );
       $errors = 1;
       next;
    }
