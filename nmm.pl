@@ -181,7 +181,7 @@ sub make_reddit_comment {
 }
 
 my $lastrun = get_lastrun();
-my $now = gmtime();
+my $now = time();
 
 # Don't record time of last run if we had errors,
 # so we can try again on the posts that didn't work out
