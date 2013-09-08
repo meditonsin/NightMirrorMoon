@@ -100,9 +100,9 @@ sub get_da {
    my $url = uri_escape( $dalink );
 
    # Try the dirty way first
-   my $scrapped_image = get_da_scrap( $dalink );
-   if ( $scrapped_image ) {
-      return $scrapped_image;
+   my $scraped_image = get_da_scrape( $dalink );
+   if ( $scraped_image ) {
+      return $scraped_image;
    }
 
    $r->request( "GET", $url );
@@ -125,7 +125,7 @@ sub get_da {
 # works with proper links, though. fav.me and links with anchors in the
 # URL that get resolved via JS won't do.
 #
-sub get_da_scrap {
+sub get_da_scrape {
    my $dalink = shift;
 
    my $dom = Mojo::DOM->new( get( $dalink ) );
@@ -220,7 +220,7 @@ sub make_reddit_comment {
    #
    # Post comment with mirror link
    #
-   my $comment_text = uri_escape( "[](/nmm)[Imgur mirror](http://imgur.com/$mirror)  \n^(This is a bot in beta - )[^(Report problems)](/message/compose/?to=$maintainer&subject=$reddit_account)" );
+   my $comment_text = uri_escape( "[](/nmm)[Imgur mirror](http://imgur.com/$mirror)  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot in beta | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to=$maintainer&subject=$reddit_account)^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)" );
    my $comment_query = "text=$comment_text&thing_id=$post&api_type=json";
    $r->request( "POST", "/api/comment?$comment_query" );
    if ( $r->responseCode != 200 ) {
