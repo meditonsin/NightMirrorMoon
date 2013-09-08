@@ -27,7 +27,6 @@ use strict;
 use URI::Escape;
 use REST::Client;
 use JSON;
-use Data::Dumper;
 
 my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
 # https://github.com/reddit/reddit/wiki/API
