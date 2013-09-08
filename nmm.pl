@@ -86,7 +86,7 @@ sub get_reddit {
       my $response = from_json( $r->responseContent );
       return $response;
    }
-   return [];
+   return undef;
 }
 
 #
@@ -241,10 +241,14 @@ my $now = time();
 # so we can try again on the posts that didn't work out
 my $errors = 0;
 
-foreach my $post ( @{get_reddit( $reddit, "/r/mylittlepony/new/.json" )->{data}->{children}} ) {
+my $posts = get_reddit( $reddit, "/r/mylittlepony/new/.json" );
+if ( ! $posts ) {
+   exit;
+}
+foreach my $post ( @{$posts->{data}->{children}} ) {
    # Skip non-DA posts
    # Direct links are deviantart.net, which are already taken care of by Trixie
-   if ( $post->{data}->{domain} !~ /(deviantart.com|fav.me)$/ ) {
+   if ( $post->{data}->{domain} !~ /(deviantart\.com|fav\.me)$/ ) {
       next;
    }
 
@@ -256,7 +260,12 @@ foreach my $post ( @{get_reddit( $reddit, "/r/mylittlepony/new/.json" )->{data}-
    # Skip posts $reddit_account already commented on
    # (only check top level comments)
    my $did_it = 0;
-   foreach my $comment ( @{get_reddit( $reddit, $post->{data}->{permalink}.".json" )->[1]->{data}->{children}} ) {
+   my $comments = get_reddit( $reddit, $post->{data}->{permalink}.".json" );
+   if ( ! $comments ) {
+      $errors = 1;
+      next;
+   }
+   foreach my $comment ( @{$comments->[1]->{data}->{children}} ) {
       if ( $comment->{data}->{author} =~ /^\Q$reddit_account\E$/i ) {
          $did_it = 1;
          last;
