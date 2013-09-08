@@ -26,6 +26,8 @@
 use strict;
 use URI::Escape;
 use REST::Client;
+use LWP::Simple;
+use Mojo::DOM;
 use JSON;
 
 my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
@@ -88,7 +90,7 @@ sub get_reddit {
 }
 
 #
-# Translate Deviantart URL into direct link to the image
+# Translate Deviantart URL into direct link to the image via DA's oEmbed API
 # Doesn't give the highest available res and doesn't do gifs
 # (returns a png or whatever)
 #
@@ -96,6 +98,12 @@ sub get_da {
    my $r = shift;
    my $dalink = shift;
    my $url = uri_escape( $dalink );
+
+   # Try the dirty way first
+   my $scrapped_image = get_da_scrap( $dalink );
+   if ( $scrapped_image ) {
+      return $scrapped_image;
+   }
 
    $r->request( "GET", $url );
 
@@ -109,6 +117,33 @@ sub get_da {
       return undef;
    }
    return undef;
+}
+
+#
+# Scrap HTML of Deviantart link for "fullview" image.
+# It's higher res than what the API returns and works with GIFs. Only
+# works with proper links, though. fav.me and links with anchors in the
+# URL that get resolved via JS won't do.
+#
+sub get_da_scrap {
+   my $dalink = shift;
+
+   my $dom = Mojo::DOM->new( get( $dalink ) );
+   if ( ! $dom ) {
+      return undef;
+   }
+
+   # Assigns different class names to the img tag every other call
+   # for some reason
+   my $fullview = $dom->at('img[class~=fullview]');
+   if ( ! $fullview ) {
+      $fullview = $dom->at('img[class~=dev-content-full]');
+      if ( ! $fullview ) {
+         return undef;
+      }
+   }
+
+   return $fullview->attrs('src');
 }
 
 #
