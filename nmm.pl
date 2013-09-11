@@ -169,6 +169,9 @@ sub make_mirror {
    if ( $r->responseCode == 200 ) {
       return $response;
    }
+   if ( $r->responseCode == 400 and $response->{data}->{error} =~ /^Image is larger than / ) {
+      return "TOO_LARGE";
+   }
    return undef;
 }
 
@@ -279,6 +282,9 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    my $mirror = make_mirror( $imgur, $deviantart, $post->{data}->{url} );
    if ( ! $mirror ) { 
       $errors = 1;
+      next;
+   }
+   if ( $mirror eq "TOO_LARGE" ) {
       next;
    }
 
