@@ -36,11 +36,14 @@ use JSON;
 #
 my $count = 0;
 my $table = Proc::ProcessTable->new;
-for my $process ( @{ $table->table } ) {
-   next unless $process->{cmndline};
-   if ($process->{cmndline} =~ /$0/) {
+for my $process ( @{$table->table} ) {
+   if ( ! $process->{cmndline} ) {
+      next;
+   }
+   if ( $process->{cmndline} =~ /perl -w $0/ ) {
       $count++;
       if ( $count > 1 ) {
+         print "Already running!\n";
          exit;
       }
    }
