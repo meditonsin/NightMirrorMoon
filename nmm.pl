@@ -41,7 +41,9 @@ for my $process ( @{$table->table} ) {
       next;
    }
    if ( $process->{cmndline} =~ /perl -w $0/ ) {
-      $count++;
+      if ( $process->{cmndline} !~ /\/bin\/sh/ ) {
+         $count++;
+      }
       if ( $count > 1 ) {
          print "Already running!\n";
          exit;
