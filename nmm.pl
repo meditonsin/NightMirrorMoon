@@ -24,11 +24,27 @@
 # THE SOFTWARE.
 
 use strict;
+use Proc::ProcessTable;
 use URI::Escape;
 use REST::Client;
 use LWP::Simple;
 use Mojo::DOM;
 use JSON;
+
+#
+# Prevent multiple instances from running at the same time
+#
+my $count = 0;
+my $table = Proc::ProcessTable->new;
+for my $process ( @{ $table->table } ) {
+   next unless $process->{cmndline};
+   if ($process->{cmndline} =~ /$0/) {
+      $count++;
+      if ( $count > 1 ) {
+         exit;
+      }
+   }
+}
 
 my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
 # https://github.com/reddit/reddit/wiki/API
