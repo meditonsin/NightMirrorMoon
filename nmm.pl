@@ -40,7 +40,7 @@ for my $process ( @{$table->table} ) {
    if ( ! $process->{cmndline} ) {
       next;
    }
-   if ( $process->{cmndline} =~ /perl -w $0/ ) {
+   if ( $process->{cmndline} =~ /$0/ ) {
       if ( $process->{cmndline} !~ /\/bin\/sh/ ) {
          $count++;
       }
