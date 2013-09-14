@@ -69,6 +69,7 @@ my $reddit_account = "NightMirrorMoon";
 my $reddit_password = "secret";
 
 my $lastrunfile = "$0.lastrun";
+my $logfile = "$0.log";
 
 #
 # Get UTC time of last successful run
@@ -92,6 +93,20 @@ sub set_lastrun {
    open( LRUN, ">", $lastrunfile ) or die "Can't open $lastrunfile: $!";
    print LRUN $time;
    close( LRUN );
+}
+
+#
+# Log mirror info (including delete hash) to $logfile
+#
+sub log_mirror {
+   my $mirror = shift;
+   my $reddit_post = shift;
+   my $datetime = `/bin/date +'%F %T'`;
+   chomp( $datetime );
+
+   open( LOG, ">>", $logfile ) or die "Can't open $logfile: $!";
+   print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink}\n";
+   close( LOG );
 }
 
 #
@@ -316,6 +331,8 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       $errors = 1;
       next;
    }
+
+   log_mirror( $mirror, $post );
 }
 
 if ( ! $errors ) {
