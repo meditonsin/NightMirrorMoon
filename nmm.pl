@@ -67,6 +67,7 @@ my $maintainer = "meditonsin";
 
 my $reddit_account = "NightMirrorMoon";
 my $reddit_password = "secret";
+my $subreddit = "mylittlepony";
 
 my $lastrunfile = "$0.lastrun";
 my $logfile = "$0.log";
@@ -280,7 +281,7 @@ my $now = time();
 # so we can try again on the posts that didn't work out
 my $errors = 0;
 
-my $posts = get_reddit( $reddit, "/r/mylittlepony/new/.json" );
+my $posts = get_reddit( $reddit, "/r/$subreddit/new/.json" );
 if ( ! $posts ) {
    exit;
 }
