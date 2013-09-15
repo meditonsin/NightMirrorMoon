@@ -136,22 +136,26 @@ sub get_da {
    my $dalink = shift;
    my $url = uri_escape( $dalink );
 
-   # Try the dirty way first
-   my $scraped_image = get_da_scrape( $dalink );
-   if ( $scraped_image ) {
-      return $scraped_image;
-   }
-
    $r->request( "GET", $url );
 
    if ( $r->responseCode == 200 ) {
       my $response = from_json( $r->responseContent );
-      if ( $response->{type} eq "link" ) {
-         return $response->{fullsize_url};
-      } elsif ( $response->{type} eq "photo" ) {
-         return $response->{url};
+
+      if ( $response->{type} ne "link" and $response->{type} ne "photo" ) {
+         return undef;
       }
-      return undef;
+
+      if ( $response->{type} eq "link" ) {
+         $response->{url} = $response->{fullsize_url};
+      }
+
+      # To try to make GIFs work
+      my $scraped_image = get_da_scrape( $dalink );
+      if ( $scraped_image ) {
+         $response->{url} = $scraped_image;
+      }
+
+      return $response;
    }
    return undef;
 }
@@ -196,9 +200,10 @@ sub make_mirror {
       return undef;
    }
 
-   my $da_image_esc = uri_escape( $da_image );
+   my $da_image_esc = uri_escape( $da_image->{url} );
    my $da_link_esc = uri_escape( $da_link );
-   my $query_string = "image=$da_image_esc&description=$da_link_esc";
+   my $da_title_esc = uri_escape( "$da_image->{title} by $da_image->{author_name}" );
+   my $query_string = "image=$da_image_esc&description=$da_link_esc&title=$da_title_esc";
 
    $r->request( "POST", "/3/image.json?$query_string", undef );
 
