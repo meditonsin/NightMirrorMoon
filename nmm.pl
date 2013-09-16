@@ -226,7 +226,7 @@ sub make_mirror {
    }
 
    my $da_image_esc = uri_escape( $da_image->{url} );
-   my $da_link_esc = uri_escape( $da_link );
+   my $da_link_esc = uri_escape( "This image was reuploaded by a bot on reddit.com/r/$subreddit from Deviantart. The original can be found here: $da_link" );
    my $da_title_esc = uri_escape( "$da_image->{title} by $da_image->{author_name}" );
    my $query_string = "image=$da_image_esc&description=$da_link_esc&title=$da_title_esc";
 
