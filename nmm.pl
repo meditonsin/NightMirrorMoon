@@ -111,6 +111,31 @@ sub log_mirror {
 }
 
 #
+# Go through $logfile to see if we already posted on a link.
+# When reddit is under load, we sometimes get unreliable data,
+# which ends in double posts.
+#
+sub post_in_log {
+   my $check_link = shift;
+
+   if ( ! -f $logfile ) {
+      return 0;
+   }
+
+   open( LOG, "<", $logfile ) or die "Can't open $logfile: $!";
+   while my $line ( <LOG> ) {
+      chomp( $line );
+      my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link ) = split( / /, $line );
+      if ( $check_link eq $reddit_link ) {
+         close( LOG );
+         return 1;
+      }
+   }
+   close( LOG );
+   return 0;
+}
+
+#
 # Get list of posts from a subreddit or list of comments from a post
 #
 sub get_reddit {
@@ -317,6 +342,9 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       }
    }
    if ( $did_it ) {
+      next;
+   }
+   if ( post_in_log( $post->{data}->{permalink} ) ) {
       next;
    }
 
