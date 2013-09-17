@@ -305,13 +305,13 @@ sub make_reddit_comment {
 }
 
 my $lastrun = get_lastrun();
-my $now = time();
 
 # Don't record time of last run if we had errors,
 # so we can try again on the posts that didn't work out
 my $errors = 0;
 
 my $posts = get_reddit( $reddit, "/r/$subreddit/new/.json" );
+my $now = time();
 if ( ! $posts ) {
    exit;
 }
