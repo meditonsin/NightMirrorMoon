@@ -60,6 +60,13 @@ $reddit->getUseragent->cookie_jar({ file => "/tmp/cookies.txt" });
 my $deviantart = REST::Client->new( { host => "http://backend.deviantart.com/oembed?format=json&url=" } );
 my $imgur = REST::Client->new( { host => "https://api.imgur.com" } );
 
+#
+# Don't make mirrors of works of these artists
+#
+my @ignore_artists = (
+   'FallenZephyr'
+);
+
 my $imgur_appid = "secret";
 $imgur->addHeader( "Authorization", "Client-ID $imgur_appid" );
 
@@ -170,6 +177,12 @@ sub get_da {
          return undef;
       }
 
+      foreach my $artist ( @ignore_artists ) {
+         if ( $response->{author_name} =~ /^\Q$artist\E$/i ) {
+            return undef;
+         }
+      }
+
       if ( $response->{type} eq "link" ) {
          $response->{url} = $response->{fullsize_url};
       }
@@ -194,7 +207,11 @@ sub get_da {
 sub get_da_scrape {
    my $dalink = shift;
 
-   my $dom = Mojo::DOM->new( get( $dalink ) );
+   my $html = get( $dalink );
+   if ( ! $html ) {
+      return undef;
+   }
+   my $dom = Mojo::DOM->new( $html );
    if ( ! $dom ) {
       return undef;
    }
