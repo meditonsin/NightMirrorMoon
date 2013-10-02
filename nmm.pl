@@ -113,7 +113,7 @@ sub log_mirror {
    chomp( $datetime );
 
    open( LOG, ">>", $logfile ) or die "Can't open $logfile: $!";
-   print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink}\n";
+   print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
    close( LOG );
 }
 
@@ -251,6 +251,7 @@ sub make_mirror {
 
    my $response = from_json( $r->responseContent );
    if ( $r->responseCode == 200 ) {
+      $response->{data}->{author_name} = $da_image->{author_name};
       return $response;
    }
    if ( $r->responseCode == 400 and $response->{data}->{error} =~ /^Image is larger than / ) {
