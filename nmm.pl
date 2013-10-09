@@ -250,13 +250,16 @@ sub make_mirror {
 
    $r->request( "POST", "/3/image.json?$query_string", undef );
 
-   my $response = from_json( $r->responseContent );
    if ( $r->responseCode == 200 ) {
+      my $response = from_json( $r->responseContent );
       $response->{data}->{author_name} = $da_image->{author_name};
       return $response;
    }
-   if ( $r->responseCode == 400 and $response->{data}->{error} =~ /^Image is larger than / ) {
-      return "TOO_LARGE";
+   if ( $r->responseCode == 400 ) {
+      my $response = from_json( $r->responseContent );
+      if ( $response->{data}->{error} =~ /^Image is larger than / ) {
+         return "TOO_LARGE";
+      }
    }
    return undef;
 }
