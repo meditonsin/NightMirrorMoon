@@ -133,7 +133,7 @@ sub post_in_log {
    open( LOG, "<", $logfile ) or die "Can't open $logfile: $!";
    while ( my $line = <LOG> ) {
       chomp( $line );
-      my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link ) = split( / /, $line );
+      my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link, $artist ) = split( / /, $line );
       if ( $check_link eq $reddit_link ) {
          close( LOG );
          return 1;
