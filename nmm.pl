@@ -68,6 +68,12 @@ my @ignore_artists = (
    'Kalyandra'
 );
 
+#
+# If this is set to 1, the bot will only mirror images that are tagged as mature
+# ( 'rating' attribute of oEmbed)
+#
+my $mature_only = 1;
+
 my $imgur_appid = "secret";
 $imgur->addHeader( "Authorization", "Client-ID $imgur_appid" );
 
@@ -175,6 +181,10 @@ sub get_da {
       my $response = from_json( $r->responseContent );
 
       if ( $response->{type} ne "link" and $response->{type} ne "photo" ) {
+         return undef;
+      }
+
+      if ( $mature_only and ( ! $response->{rating} or $response->{rating} ne 'adult' ) ) {
          return undef;
       }
 
