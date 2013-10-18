@@ -72,7 +72,7 @@ my @ignore_artists = (
 # If this is set to 1, the bot will only mirror images that are tagged as mature
 # ( 'rating' attribute of oEmbed)
 #
-my $mature_only = 1;
+my $mature_only = 0;
 
 my $imgur_appid = "secret";
 $imgur->addHeader( "Authorization", "Client-ID $imgur_appid" );

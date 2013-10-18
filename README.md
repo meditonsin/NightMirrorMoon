@@ -23,6 +23,10 @@ the user agent string of the `REST::Client` instance that does
 calls to reddit to something of your own.  [See here for more
 info.](https://github.com/reddit/reddit/wiki/API)
 
+There's also the option to only mirror content that is tagged as mature,
+to allow people without DA accounts to see it. Set `$mature_only` to
+`1` for that.
+
 
 Limitations
 -----------
