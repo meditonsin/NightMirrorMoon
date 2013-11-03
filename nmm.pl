@@ -201,6 +201,10 @@ sub get_da {
       # To try to make GIFs work
       my $scraped_image = get_da_scrape( $dalink );
       if ( $scraped_image ) {
+         # Ignore flash previews
+         if ( $scraped_image eq "FLASH" ) {
+            return undef;
+         }
          $response->{url} = $scraped_image;
       }
 
@@ -225,6 +229,13 @@ sub get_da_scrape {
    my $dom = Mojo::DOM->new( $html );
    if ( ! $dom ) {
       return undef;
+   }
+
+   # Check if this is a flash animation
+   # We don't need a mirror of the preview
+   my $is_flash = $dom->at( 'iframe[class~=flashtime]' );
+   if ( $is_flash ) {
+      return "FLASH";
    }
 
    # Assigns different class names to the img tag every other call
