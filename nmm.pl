@@ -69,6 +69,13 @@ my @ignore_artists = (
 );
 
 #
+# Don't mirror posts by these submitters
+#
+my @ignore_submitters = (
+   'stabbing_robot'
+);
+
+#
 # If this is set to 1, the bot will only mirror images that are tagged as mature
 # ( 'rating' attribute of oEmbed)
 #
@@ -363,6 +370,15 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    # Direct links are deviantart.net, which are already taken care of by Trixie
    if ( $post->{data}->{domain} !~ /(deviantart\.com|fav\.me)$/ ) {
       next;
+   }
+
+   #
+   # Skip posts by certain reddit users
+   #
+   foreach my $submitter ( @ignore_submitters ) {
+      if ( $post->{data}->{author} =~ /^\Q$submitter\E$/i ) {
+         return next;
+      }
    }
 
    # Skip posts since last successful run
