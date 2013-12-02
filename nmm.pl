@@ -127,6 +127,7 @@ sub log_mirror {
    chomp( $datetime );
 
    open( LOG, ">>", $logfile ) or die "Can't open $logfile: $!";
+   binmode LOG, ":encoding(UTF-8)";
    print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
    close( LOG );
 }
