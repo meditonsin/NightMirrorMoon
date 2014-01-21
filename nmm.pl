@@ -65,7 +65,8 @@ my $imgur = REST::Client->new( { host => "https://api.imgur.com" } );
 #
 my @ignore_artists = (
    'FallenZephyr',
-   'Kalyandra'
+   'Kalyandra',
+   'RabbitTales'
 );
 
 #
