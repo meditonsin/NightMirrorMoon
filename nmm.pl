@@ -32,35 +32,6 @@ use Mojo::DOM;
 use JSON;
 
 #
-# Prevent multiple instances from running at the same time
-#
-my $count = 0;
-my $table = Proc::ProcessTable->new;
-for my $process ( @{$table->table} ) {
-   if ( ! $process->{cmndline} ) {
-      next;
-   }
-   if ( $process->{cmndline} =~ /$0/ ) {
-      if ( $process->{cmndline} !~ /\/bin\/sh/ ) {
-         $count++;
-      }
-      if ( $count > 1 ) {
-         print "Already running!\n";
-         exit;
-      }
-   }
-}
-
-my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
-# https://github.com/reddit/reddit/wiki/API
-$reddit->getUseragent->agent( "NightMirrorMoon/0.1 by meditonsin" );
-# Need cookies or logins won't last
-$reddit->getUseragent->cookie_jar({ file => "/tmp/cookies.txt" });
-
-my $deviantart = REST::Client->new( { host => "http://backend.deviantart.com/oembed?format=json&url=" } );
-my $imgur = REST::Client->new( { host => "https://api.imgur.com" } );
-
-#
 # Don't make mirrors of works of these artists
 #
 my @ignore_artists = (
@@ -82,17 +53,61 @@ my @ignore_submitters = (
 #
 my $mature_only = 0;
 
-my $imgur_appid = "secret";
-$imgur->addHeader( "Authorization", "Client-ID $imgur_appid" );
-
 my $maintainer = "meditonsin";
+my $useragent = "NightMirrorMoon/0.1 by $maintainer";
+
+my $imgur_appid = "secret";
 
 my $reddit_account = "NightMirrorMoon";
 my $reddit_password = "secret";
 my $subreddit = "mylittlepony";
 
+
+
+#
+# Prevent multiple instances from running at the same time
+#
+my $count = 0;
+my $table = Proc::ProcessTable->new;
+for my $process ( @{$table->table} ) {
+   if ( ! $process->{cmndline} ) {
+      next;
+   }
+   if ( $process->{cmndline} =~ /$0/ ) {
+      if ( $process->{cmndline} !~ /\/bin\/sh/ ) {
+         $count++;
+      }
+      if ( $count > 1 ) {
+         print "Already running!\n";
+         exit;
+      }
+   }
+}
+
+my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
+# https://github.com/reddit/reddit/wiki/API
+$reddit->getUseragent->agent( $useragent );
+# Need cookies or logins won't last
+$reddit->getUseragent->cookie_jar({ file => "/tmp/cookies.txt" });
+
+my $deviantart = REST::Client->new( { host => "http://backend.deviantart.com" } );
+$deviantart->getUseragent->agent( $useragent );
+
+my $imgur = REST::Client->new( { host => "https://api.imgur.com" } );
+$imgur->getUseragent->agent( $useragent );
+$imgur->addHeader( "Authorization", "Client-ID $imgur_appid" );
+
+my $gfy = REST::Client->new( { host => "http://upload.gfycat.com" } );
+$gfy->getUseragent->agent( $useragent );
+
+my $tumblr = REST::Client->new( { host => "http://api.tumblr.com/v2" } );
+$tumblr->getUseragent->agent( $useragent );
+
 my $lastrunfile = "$0.lastrun";
 my $logfile = "$0.log";
+my $gfy_logfile = "$0_gfy.log";
+my $errorlog = "$0.err";
+
 
 #
 # Get UTC time of last successful run
@@ -127,10 +142,21 @@ sub log_mirror {
    my $datetime = `/bin/date +'%F %T'`;
    chomp( $datetime );
 
-   open( LOG, ">>", $logfile ) or die "Can't open $logfile: $!";
-   binmode LOG, ":encoding(UTF-8)";
-   print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
-   close( LOG );
+   # Log imgur mirror
+   if ( $mirror->{data}->{id} ) {
+      open( LOG, ">>", $logfile ) or die "Can't open $logfile: $!";
+      binmode LOG, ":encoding(UTF-8)";
+      print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
+      close( LOG );
+   }
+
+   # Log gfy mirror
+   if ( $mirror->{gfy} ) {
+      open( GFYLOG, ">>", $gfy_logfile ) or die "Can't open $gfy_logfile: $!";
+      binmode GFYLOG, ":encoding(UTF-8)";
+      print GFYLOG "$datetime $mirror->{gfy}->{gfyname} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
+      close( GFYLOG );
+   }
 }
 
 #
@@ -155,6 +181,18 @@ sub post_in_log {
       }
    }
    close( LOG );
+
+   open( GFYLOG, "<", $gfy_logfile ) or die "Can't open $gfy_logfile: $!";
+   while ( my $line = <GFYLOG> ) {
+      chomp( $line );
+      my ( $date, $time, $gfyname, $reddit_link, $artist ) = split( / /, $line );
+      if ( $check_link eq $reddit_link ) {
+         close( GFYLOG );
+         return 1;
+      }
+   }
+   close( GFYLOG );
+
    return 0;
 }
 
@@ -168,8 +206,7 @@ sub get_reddit {
    $r->request( "GET", $url );
 
    if ( $r->responseCode == 200 ) {
-      my $response = from_json( $r->responseContent );
-      return $response;
+      return from_json( $r->responseContent );
    }
    return undef;
 }
@@ -184,7 +221,7 @@ sub get_da {
    my $dalink = shift;
    my $url = uri_escape( $dalink );
 
-   $r->request( "GET", $url );
+   $r->request( "GET", "/oembed?format=json&url=$url" );
 
    if ( $r->responseCode == 200 ) {
       my $response = from_json( $r->responseContent );
@@ -249,23 +286,93 @@ sub get_da_scrape {
 
    # Assigns different class names to the img tag every other call
    # for some reason
-   my $fullview = $dom->at('img[class~=fullview]');
+   my $fullview = $dom->at( 'img[class~=fullview]' );
    if ( ! $fullview ) {
-      $fullview = $dom->at('img[class~=dev-content-full]');
+      $fullview = $dom->at( 'img[class~=dev-content-full]' );
       if ( ! $fullview ) {
          return undef;
       }
    }
 
-   return $fullview->attrs('src');
+   return $fullview->attrs( 'src' );
+}
+
+#
+# Get info on an imgur image
+#
+sub get_imgur {
+   my $r = shift;
+   my $id = shift;
+
+   if ( ! $id ) {
+      return undef;
+   }
+
+   $r->request( "GET", "/3/image/$id", undef );
+
+   if ( $r->responseCode == 200 ) {
+      return from_json( $r->responseContent );
+   }
+
+   return undef;
+}
+
+#
+# Mirror a gif to gfycat
+#
+sub make_gfy_mirror {
+   my $r = shift;
+   my $gif_url = shift;
+   my $url = uri_escape( $gif_url );
+
+   if ( $gif_url !~ /\.gif$/i ) {
+      return undef;
+   }
+
+   $r->request( "GET", "/transcode?fetchUrl=$url" );
+
+   if ( $r->responseCode == 200 ) {
+      return from_json( $r->responseContent );
+   }
+   return undef;
 }
 
 #
 # Make imgur mirror
 #
-sub make_mirror {
+sub make_imgur_mirror {
+   my $r = shift;
+   my $url = uri_escape( shift );
+   my $title = uri_escape( shift );
+   my $description = uri_escape( shift );
+   my $query_string = "image=$url&titel=$title&description=$description";
+
+   $r->request( "POST", "/3/image.json?$query_string", undef );
+
+   if ( $r->responseCode == 400 ) {
+      my $response = from_json( $r->responseContent );
+      if ( $response->{data}->{error} =~ /^Image is larger than / or
+           $response->{data}->{error} =~ /^Animated GIF is larger than / ) {
+         log_error( "make_imgur_mirror(): Didn't mirror $url; TOO_LARGE" );
+         return $response;
+      }
+   }
+
+   if ( $r->responseCode == 200 ) {
+      return from_json( $r->responseContent );
+   }
+
+   log_error( "make_imgur_mirror(): Failed to mirror $url; Got HTTP " . $r->responseCode );
+   return undef;
+}
+
+#
+# Mirror deviantart to imgur
+#
+sub mirror_da {
    my $r = shift;
    my $da = shift;
+   my $gfy = shift;
    my $da_link = shift;
    my $da_image = get_da( $da, $da_link );
 
@@ -273,31 +380,31 @@ sub make_mirror {
       return undef;
    }
 
-   my $da_image_esc = uri_escape( $da_image->{url} );
-   my $da_link_esc = uri_escape( "This image was reuploaded by a bot on reddit.com/r/$subreddit from Deviantart. The original can be found here: $da_link" );
-   my $da_title_esc = uri_escape( "$da_image->{title} by $da_image->{author_name}" );
-   my $query_string = "image=$da_image_esc&description=$da_link_esc&title=$da_title_esc";
-
-   $r->request( "POST", "/3/image.json?$query_string", undef );
-
-   if ( $r->responseCode == 200 ) {
-      my $response = from_json( $r->responseContent );
-      $response->{data}->{author_name} = $da_image->{author_name};
-      return $response;
+   my $gfy_mirror;
+   if ( $da_image->{url} =~ /\.gif$/i ) {
+      $gfy_mirror = make_gfy_mirror( $gfy, $da_image->{url} );
    }
-   if ( $r->responseCode == 400 ) {
-      my $response = from_json( $r->responseContent );
-      if ( $response->{data}->{error} =~ /^Image is larger than / ) {
-         return "TOO_LARGE";
-      }
+
+   my $mirror = make_imgur_mirror(
+      $r,
+      $da_image->{url},
+      "$da_image->{title} by $da_image->{author_name}",
+      "This image was reuploaded by a bot on reddit.com/r/$subreddit from Deviantart. The original can be found here: $da_link"
+   );
+
+   if ( $mirror or $gfy_mirror ) {
+      $mirror->{gfy} = $gfy_mirror;
+      $mirror->{data}->{author_name} = $da_image->{author_name};
+      return $mirror;
    }
+
    return undef;
 }
 
 #
 # Delete imgur mirror
 #
-sub delete_mirror {
+sub delete_imgur_mirror {
    my $r = shift;
    my $dhash = shift;
 
@@ -315,7 +422,7 @@ sub delete_mirror {
 sub make_reddit_comment {
    my $r = shift;
    my $post = shift;
-   my $mirror = shift;
+   my @links = @_;
 
    my $response = undef;
 
@@ -342,7 +449,8 @@ sub make_reddit_comment {
    #
    # Post comment with mirror link
    #
-   my $comment_text = uri_escape( "[](/nmm)[Imgur mirror](http://imgur.com/$mirror)  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to=$maintainer&subject=$reddit_account)^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)" );
+   my $links = join( '  \n', @links );
+   my $comment_text = uri_escape( "[](/nmm)$links  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to=$maintainer&subject=$reddit_account)^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)" );
    my $comment_query = "text=$comment_text&thing_id=$post&api_type=json";
    $r->request( "POST", "/api/comment?$comment_query" );
    if ( $r->responseCode != 200 ) {
@@ -410,19 +518,34 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    }
 
    # Make a mirror
-   my $mirror = make_mirror( $imgur, $deviantart, $post->{data}->{url} );
+   my $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
    if ( ! $mirror ) { 
       $errors = 1;
       next;
    }
-   if ( $mirror eq "TOO_LARGE" ) {
-      next;
+   if ( $mirror->{data} and $mirror->{data}->{error} and (
+           $mirror->{data}->{error} =~ /^Image is larger than / or
+           $mirror->{data}->{error} =~ /^Animated GIF is larger than /
+        )
+   ) {
+      if ( ! $mirror->{gfy} ) {
+         next;
+      }
+   }
+
+   # Make list of mirror links
+   my @links;
+   if ( $mirror->{data} and $mirror->{data}->{id} ) {
+      push @links, "[Imgur mirror](http://imgur.com/" . $mirror->{data}->{id} . ")";
+   }
+   if ( $mirror->{gfy} and $mirror->{gfy}->{gfyname} ) {
+      push @links, "[Gfycat mirror](http://gfycat.com/" . $mirror->{gfy}->{gfyname} . ")";
    }
 
    # Make comment in submission post
-   if ( ! make_reddit_comment( $reddit, $post->{data}->{name}, $mirror->{data}->{id} ) ) {
+   if ( ! make_reddit_comment( $reddit, $post->{data}->{name}, @links ) ) {
       # Don't leave the now useless mirror up
-      delete_mirror( $imgur, $mirror->{data}->{deletehash} );
+      delete_imgur_mirror( $imgur, $mirror->{data}->{deletehash} );
       $errors = 1;
       next;
    }
