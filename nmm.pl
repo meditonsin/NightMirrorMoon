@@ -160,6 +160,21 @@ sub log_mirror {
 }
 
 #
+# Log an error
+#
+sub log_error {
+   my $message = shift;
+   my $datetime = `/bin/date +'%F %T'`;
+   chomp( $datetime );
+   chomp( $message );
+
+   open( LOG, ">>", $errorlog ) or die "Can't open $errorlog: $!";
+   binmode LOG, ":encoding(UTF-8)";
+   print LOG "$datetime $message\n";
+   close( LOG );
+}
+
+#
 # Go through $logfile to see if we already posted on a link.
 # When reddit is under load, we sometimes get unreliable data,
 # which ends in double posts.
@@ -208,6 +223,7 @@ sub get_reddit {
    if ( $r->responseCode == 200 ) {
       return from_json( $r->responseContent );
    }
+   log_error( "get_reddit(): Couldn't fetch $url; got HTTP " . $r->responseCode );
    return undef;
 }
 
@@ -256,11 +272,12 @@ sub get_da {
 
       return $response;
    }
+   log_error( "get_da(): Couldn't fetch $url; got HTTP " . $r->responseCode );
    return undef;
 }
 
 #
-# Scrap HTML of Deviantart link for "fullview" image.
+# Scrape HTML of Deviantart link for "fullview" image.
 # It's higher res than what the API returns and works with GIFs. Only
 # works with proper links, though. fav.me and links with anchors in the
 # URL that get resolved via JS won't do.
@@ -270,10 +287,12 @@ sub get_da_scrape {
 
    my $html = get( $dalink );
    if ( ! $html ) {
+      log_error( "get_da_scrape(): Failed to get $dalink" );
       return undef;
    }
    my $dom = Mojo::DOM->new( $html );
    if ( ! $dom ) {
+      log_error( "get_da_scrape(): Failed to parse $dalink" );
       return undef;
    }
 
@@ -281,6 +300,7 @@ sub get_da_scrape {
    # We don't need a mirror of the preview
    my $is_flash = $dom->at( 'iframe[class~=flashtime]' );
    if ( $is_flash ) {
+      log_error( "get_da_scrape(): Won't fetch $dalink; FLASH" );
       return "FLASH";
    }
 
@@ -290,6 +310,7 @@ sub get_da_scrape {
    if ( ! $fullview ) {
       $fullview = $dom->at( 'img[class~=dev-content-full]' );
       if ( ! $fullview ) {
+         log_error( "get_da_scrape(): Couldn't find fullview of $dalink" );
          return undef;
       }
    }
@@ -334,6 +355,7 @@ sub make_gfy_mirror {
    if ( $r->responseCode == 200 ) {
       return from_json( $r->responseContent );
    }
+   log_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode );
    return undef;
 }
 
@@ -413,7 +435,7 @@ sub delete_imgur_mirror {
    if ( $r->responseCode == 200 ) {
       return 1;
    }
-   #die "Couldn't delete mirror $dhash (".$response->{data}->{error}.")";
+   log_error( "delete_imgur_mirror(): Failed to remove mirror $dhash; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -434,10 +456,12 @@ sub make_reddit_comment {
       my $login_query = "user=$reddit_account&passwd=$reddit_password&rem=false&api_type=json";
       $r->request( "POST", "/api/login?$login_query" );
       if ( $r->responseCode != 200 ) {
+         log_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $r->responseCode );
          return undef;
       }
       $response = from_json( $r->responseContent );
       if ( ! $response->{json}->{data} ) {
+         log_error( "make_reddit_comment(): Failed to parse login response" );
          return undef;
       }
 
@@ -454,10 +478,12 @@ sub make_reddit_comment {
    my $comment_query = "text=$comment_text&thing_id=$post&api_type=json";
    $r->request( "POST", "/api/comment?$comment_query" );
    if ( $r->responseCode != 200 ) {
+      log_error( "make_reddit_comment(): Failed post comment; Got HTTP " . $r->responseCode );
       return undef;
    }
    $response = from_json( $r->responseContent );
    if ( ! $response->{json}->{data} ) {
+      log_error( "make_reddit_comment(): Failed post comment; Got Reddit response: " . $response->{json}->{errors}->[0]->[0] );
       return undef;
    }
 
@@ -487,6 +513,7 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    #
    foreach my $submitter ( @ignore_submitters ) {
       if ( $post->{data}->{author} =~ /^\Q$submitter\E$/i ) {
+         log_error( "main(): Skipped reddit user $post->{data}->{author}\@$post->{data}->{permalink}" );
          return next;
       }
    }
