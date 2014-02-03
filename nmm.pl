@@ -323,13 +323,13 @@ sub get_da_scrape {
 #
 sub get_imgur {
    my $r = shift;
-   my $id = shift;
+   my $url = shift;
 
-   if ( ! $id ) {
+   if ( $url !~ /imgur.com\/([^.\/]+)(\.[^\.\/]+|:?)$/i ) {
       return undef;
    }
 
-   $r->request( "GET", "/3/image/$id", undef );
+   $r->request( "GET", "/3/image/$1", undef );
 
    if ( $r->responseCode == 200 ) {
       return from_json( $r->responseContent );
@@ -424,6 +424,42 @@ sub mirror_da {
 }
 
 #
+# Mirror gif from imgur to gfycat
+#
+sub mirror_imgur {
+   my $r = shift;
+   my $gfy = shift;
+   my $imgur_link = shift;
+   my $imgur_image = get_imgur( $r, $imgur_link );
+
+   if ( ! $imgur_image ) {
+      return undef;
+   }
+
+   # Not a gif
+   if ( ! $imgur_image->{data}->{animated} ) {
+      return undef;
+   }
+
+   if ( $mature_only and ( ! $imgur_image->{data}->{nsfw} ) ) {
+      return undef;
+   }
+
+   my $gfy_mirror = make_gfy_mirror( $gfy, $imgur_image->{data}->{link} );
+   if ( $gfy_mirror ) {
+      my $mirror = {
+         gfy  => $gfy_mirror,
+         data => {
+            author_name => '-'
+         }
+      };
+      return $mirror
+   }
+
+   return undef;
+}
+
+#
 # Delete imgur mirror
 #
 sub delete_imgur_mirror {
@@ -504,7 +540,7 @@ if ( ! $posts ) {
 foreach my $post ( @{$posts->{data}->{children}} ) {
    # Skip non-DA posts
    # Direct links are deviantart.net, which are already taken care of by Trixie
-   if ( $post->{data}->{domain} !~ /(deviantart\.com|fav\.me)$/ ) {
+   if ( $post->{data}->{domain} !~ /(deviantart\.com|fav\.me|imgur\.com)$/ ) {
       next;
    }
 
@@ -545,7 +581,16 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    }
 
    # Make a mirror
-   my $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
+   my $mirror;
+   if ( $post->{data}->{domain} =~ /imgur.com$/i ) {
+      $mirror = mirror_imgur( $imgur, $gfy, $post->{data}->{url} );
+      if ( ! $mirror ) {
+         next;
+      }
+   } else {
+      $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
+   }
+
    if ( ! $mirror ) { 
       $errors = 1;
       next;
