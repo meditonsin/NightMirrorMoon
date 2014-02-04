@@ -367,7 +367,7 @@ sub make_imgur_mirror {
    my $url = uri_escape( shift );
    my $title = uri_escape( shift );
    my $description = uri_escape( shift );
-   my $query_string = "image=$url&titel=$title&description=$description";
+   my $query_string = "image=$url&title=$title&description=$description";
 
    $r->request( "POST", "/3/image.json?$query_string", undef );
 
