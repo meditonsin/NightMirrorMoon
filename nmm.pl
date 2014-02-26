@@ -30,6 +30,7 @@ use REST::Client;
 use LWP::Simple;
 use Mojo::DOM;
 use JSON;
+use Carp;
 
 #
 # Don't make mirrors of works of these artists
@@ -38,6 +39,12 @@ my @ignore_artists = (
    'FallenZephyr',
    'Kalyandra',
    'RabbitTales'
+);
+
+#
+# Don't make mirrors of these tumblr blogs
+#
+my @ignore_tumblrs = (
 );
 
 #
@@ -53,10 +60,18 @@ my @ignore_submitters = (
 #
 my $mature_only = 0;
 
+#
+# Maxmimum number of retries the bot will make before giving up after
+# encountering an error while creating a mirror
+#
+my $max_retries = 5;
+
 my $maintainer = "meditonsin";
 my $useragent = "NightMirrorMoon/0.1 by $maintainer";
 
 my $imgur_appid = "secret";
+
+my $tumblr_api_key = "secret";
 
 my $reddit_account = "NightMirrorMoon";
 my $reddit_password = "secret";
@@ -106,6 +121,7 @@ $tumblr->getUseragent->agent( $useragent );
 my $lastrunfile = "$0.lastrun";
 my $logfile = "$0.log";
 my $gfy_logfile = "$0_gfy.log";
+my $tumblr_logfile = "$0_tumblr.log";
 my $errorlog = "$0.err";
 
 
@@ -143,7 +159,7 @@ sub log_mirror {
    chomp( $datetime );
 
    # Log imgur mirror
-   if ( $mirror->{data}->{id} ) {
+   if ( $mirror->{data}->{id} and ! $mirror->{data}->{tumblr} ) {
       open( LOG, ">>", $logfile ) or die "Can't open $logfile: $!";
       binmode LOG, ":encoding(UTF-8)";
       print LOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
@@ -156,6 +172,14 @@ sub log_mirror {
       binmode GFYLOG, ":encoding(UTF-8)";
       print GFYLOG "$datetime $mirror->{gfy}->{gfyname} $reddit_post->{data}->{permalink} $mirror->{data}->{author_name}\n";
       close( GFYLOG );
+   }
+
+   # Log imgur album
+   if ( $mirror->{data}->{id} and $mirror->{data}->{tumblr} ) {
+      open( TLOG, ">>", $tumblr_logfile ) or die "Can't open $tumblr_logfile: $!";
+      binmode TLOG, ":encoding(UTF-8)";
+      print TLOG "$datetime $mirror->{data}->{id} $mirror->{data}->{deletehash} $reddit_post->{data}->{permalink} $mirror->{data}->{tumblr}\n";
+      close( TLOG );
    }
 }
 
@@ -186,6 +210,7 @@ sub post_in_log {
       return 0;
    }
 
+   # Check imgur mirrors
    open( LOG, "<", $logfile ) or die "Can't open $logfile: $!";
    while ( my $line = <LOG> ) {
       chomp( $line );
@@ -197,6 +222,7 @@ sub post_in_log {
    }
    close( LOG );
 
+   # Check gfy mirrors
    open( GFYLOG, "<", $gfy_logfile ) or die "Can't open $gfy_logfile: $!";
    while ( my $line = <GFYLOG> ) {
       chomp( $line );
@@ -207,6 +233,18 @@ sub post_in_log {
       }
    }
    close( GFYLOG );
+
+   # Check imgur albums
+   open( TLOG, "<", $tumblr_logfile ) or die "Can't open $tumblr_logfile: $!";
+   while ( my $line = <TLOG> ) {
+      chomp( $line );
+      my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link, $artist ) = split( / /, $line );
+      if ( $check_link eq $reddit_link ) {
+         close( TLOG );
+         return 1;
+      }
+   }
+   close( TLOG );
 
    return 0;
 }
@@ -221,9 +259,45 @@ sub get_reddit {
    $r->request( "GET", $url );
 
    if ( $r->responseCode == 200 ) {
-      return from_json( $r->responseContent );
+      return parse_json( $r->responseContent );
    }
-   log_error( "get_reddit(): Couldn't fetch $url; got HTTP " . $r->responseCode );
+   log_error( "get_reddit(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
+   return undef;
+}
+
+#
+# Get post from tumblr
+#
+sub get_tumblr {
+   my $r = shift;
+   my $url = shift;
+
+   unless ( $url =~ /^https?:\/\/([a-z0-9\-]+\.tumblr\.com)\/(?:post|image)\/(\d+)(?:\/.*)?$/i ) {
+      return undef;
+   }
+   my $blog_name = $1;
+   my $post_id = $2;
+
+   $r->request( "GET", "/blog/$blog_name/posts?api_key=$tumblr_api_key&id=$post_id&filter=raw" );
+   if ( $r->responseCode != 200 ) {
+      log_error( "get_tumblr(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
+      return undef;
+   }
+
+   my $post = parse_json( $r->responseContent );
+   if ( $post->{response}->{total_posts} == 1 and defined $post->{response}->{posts}->[0]->{photos} ) {
+      if ( $mature_only and ( ! $post->{response}->{posts}->[0]->{is_nsfw} ) ) {
+         return undef;
+      }
+
+      foreach my $t ( @ignore_tumblrs ) {
+         if ( $post->{blog_name} =~ /^\Q$t\E$/i ) {
+            return undef;
+         }
+      }
+
+      return $post->{response}->{posts}->[0];
+   }
    return undef;
 }
 
@@ -240,7 +314,7 @@ sub get_da {
    $r->request( "GET", "/oembed?format=json&url=$url" );
 
    if ( $r->responseCode == 200 ) {
-      my $response = from_json( $r->responseContent );
+      my $response = parse_json( $r->responseContent );
 
       if ( $response->{type} ne "link" and $response->{type} ne "photo" ) {
          return undef;
@@ -272,7 +346,7 @@ sub get_da {
 
       return $response;
    }
-   log_error( "get_da(): Couldn't fetch $url; got HTTP " . $r->responseCode );
+   log_error( "get_da(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
    return undef;
 }
 
@@ -332,7 +406,11 @@ sub get_imgur {
    $r->request( "GET", "/3/image/$1", undef );
 
    if ( $r->responseCode == 200 ) {
-      return from_json( $r->responseContent );
+      # Imgur is probably over capacity...
+      if ( $r->responseContent =~ /^HTTP\/1.1 \d+/ ) {
+         return undef;
+      }
+      return parse_json( $r->responseContent );
    }
 
    return undef;
@@ -344,6 +422,7 @@ sub get_imgur {
 sub make_gfy_mirror {
    my $r = shift;
    my $gif_url = shift;
+   my $retries = shift || 0;
    my $url = uri_escape( $gif_url );
 
    if ( $gif_url !~ /\.gif$/i ) {
@@ -353,8 +432,16 @@ sub make_gfy_mirror {
    $r->request( "GET", "/transcode?fetchUrl=$url" );
 
    if ( $r->responseCode == 200 ) {
-      return from_json( $r->responseContent );
+      my $response = parse_json( $r->responseContent );
+      push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
+      return $response;
    }
+
+   if ( $retries < $max_retries ) {
+      sleep( 5 );
+      return make_gfy_mirror( $r, $gif_url, $retries + 1 );
+   }
+
    log_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode );
    return undef;
 }
@@ -367,12 +454,18 @@ sub make_imgur_mirror {
    my $url = uri_escape( shift );
    my $title = uri_escape( shift );
    my $description = uri_escape( shift );
+   my $album = shift;
+
    my $query_string = "image=$url&title=$title&description=$description";
+
+   if ( $album ) {
+      $query_string .= "&album=" . uri_escape( $album );
+   }
 
    $r->request( "POST", "/3/image.json?$query_string", undef );
 
    if ( $r->responseCode == 400 ) {
-      my $response = from_json( $r->responseContent );
+      my $response = parse_json( $r->responseContent );
       if ( $response->{data}->{error} =~ /^Image is larger than / or
            $response->{data}->{error} =~ /^Animated GIF is larger than / ) {
          log_error( "make_imgur_mirror(): Didn't mirror $url; TOO_LARGE" );
@@ -381,10 +474,93 @@ sub make_imgur_mirror {
    }
 
    if ( $r->responseCode == 200 ) {
-      return from_json( $r->responseContent );
+      my $response = parse_json( $r->responseContent );
+      push @{$response->{links}}, '[Imgur mirror](http://imgur.com/' . $response->{data}->{id} . ')';
+      return $response;
    }
 
    log_error( "make_imgur_mirror(): Failed to mirror $url; Got HTTP " . $r->responseCode );
+   return undef;
+}
+
+#
+# Make imgur album from an array of mirrors
+#
+sub make_imgur_album {
+   my $r = shift;
+   my $title = uri_escape( shift );
+   my $description = uri_escape( shift );
+   my @images = @_;
+
+   my $query_string = "title=$title&description=$description&privacy=hidden&layout=blog";
+
+   if ( ! @images ) {
+      return undef;
+   }
+
+   $r->request( "POST", "/3/album.json?$query_string", undef );
+
+   if ( $r->responseCode == 200 ) {
+      my $album = parse_json( $r->responseContent );
+
+      if ( ! $album->{data}->{deletehash} ) {
+         print STDERR "make_imgur_album():\n";
+         print STDERR JSON->new->pretty->encode( $album );
+         die "\n";
+      }
+      foreach my $img ( @images ) {
+         my $mirror = make_imgur_mirror( $r, $img, '', '', $album->{data}->{deletehash} );
+         if ( ! $mirror ) {
+            log_error( "make_imgur_album(): Couldn't mirror $img; undef" );
+            delete_imgur_album( $r, $album->{data}->{deletehash} );
+            return undef;
+         }
+         if ( $mirror->{data}->{error} and (
+               $mirror->{data}->{error} =~ /^Image is larger than / or
+               $mirror->{data}->{error} =~ /^Animated GIF is larger than / ) ) {
+            log_error( "make_imgur_album(): Couldn't mirror $img; TOO_LARGE" );
+            delete_imgur_album( $r, $album->{data}->{deletehash} );
+            return undef;
+         }
+      }
+
+      push @{$album->{links}}, '[Imgur mirror](http://imgur.com/a/' . $album->{data}->{id} . ')';
+      return $album;
+   }
+}
+
+#
+# Make imgur mirror of a tumblr post
+#
+sub mirror_tumblr {
+   my $r = shift;
+   my $imgur = shift;
+   my $t_link = shift;
+
+   my $post = get_tumblr( $r, $t_link );
+
+   # DEBUG
+   if ( ! $post->{blog_name} or ! $post->{post_url} ) {
+      #print STDERR "Got incomplete post ($t_link):\n" . JSON->new->pretty->encode( $post );
+      return undef;
+   }
+
+   my @photos;
+   foreach my $photo ( @{$post->{photos}} ) {
+      push @photos, $photo->{original_size}->{url};
+   }
+
+   my $mirror = make_imgur_album(
+      $imgur,
+      $post->{blog_name} || '-',
+      "These images were reuploaded by a bot on reddit.com/r/$subreddit from tumblr. The original can be found here: $post->{post_url}",
+      @photos
+   );
+
+   if ( $mirror && $mirror->{data} ) {
+      $mirror->{data}->{tumblr} = $post->{blog_name};
+      return $mirror;
+   }
    return undef;
 }
 
@@ -465,13 +641,42 @@ sub mirror_imgur {
 sub delete_imgur_mirror {
    my $r = shift;
    my $dhash = shift;
+   my $retries = shift || 0;
 
    $r->request( "DELETE", "/3/image/$dhash" );
 
    if ( $r->responseCode == 200 ) {
       return 1;
    }
+
+   if ( $retries < $max_retries ) {
+      sleep( 5 );
+      return delete_imgur_mirror( $r, $dhash, $retries + 1 );
+   }
+
    log_error( "delete_imgur_mirror(): Failed to remove mirror $dhash; Got HTTP " . $r->responseCode );
+}
+
+#
+# Delete imgur album
+#
+sub delete_imgur_album {
+   my $r = shift;
+   my $dhash = shift;
+   my $retries = shift || 0;
+
+   $r->request( "DELETE", "/3/album/$dhash" );
+
+   if ( $r->responseCode == 200 ) {
+      return 1;
+   }
+
+   if ( $retries < $max_retries ) {
+      sleep( 5 );
+      return delete_imgur_album( $r, $dhash, $retries + 1 );
+   }
+
+   log_error( "delete_imgur_album(): Failed to remove album $dhash; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -495,7 +700,7 @@ sub make_reddit_comment {
          log_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $r->responseCode );
          return undef;
       }
-      $response = from_json( $r->responseContent );
+      $response = parse_json( $r->responseContent );
       if ( ! $response->{json}->{data} ) {
          log_error( "make_reddit_comment(): Failed to parse login response" );
          return undef;
@@ -517,7 +722,7 @@ sub make_reddit_comment {
       log_error( "make_reddit_comment(): Failed post comment; Got HTTP " . $r->responseCode );
       return undef;
    }
-   $response = from_json( $r->responseContent );
+   $response = parse_json( $r->responseContent );
    if ( ! $response->{json}->{data} ) {
       log_error( "make_reddit_comment(): Failed post comment; Got Reddit response: " . $response->{json}->{errors}->[0]->[0] );
       return undef;
@@ -525,6 +730,23 @@ sub make_reddit_comment {
 
    return $response;
 }
+
+#
+# Handle errors thrown by from_json
+#
+sub parse_json {
+   my $json = shift;
+   my $ret;
+
+   eval {
+      $ret = from_json( $json );
+   } or do {
+      croak "Error parsing json:\n$json";
+   };
+
+   return $ret;
+}
+
 
 my $lastrun = get_lastrun();
 
@@ -540,7 +762,7 @@ if ( ! $posts ) {
 foreach my $post ( @{$posts->{data}->{children}} ) {
    # Skip non-DA posts
    # Direct links are deviantart.net, which are already taken care of by Trixie
-   if ( $post->{data}->{domain} !~ /(deviantart\.com|fav\.me|imgur\.com)$/ ) {
+   if ( $post->{data}->{domain} !~ /(deviantart\.com|fav\.me|imgur\.com|tumblr\.com)$/i ) {
       next;
    }
 
@@ -582,11 +804,10 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
 
    # Make a mirror
    my $mirror;
-   if ( $post->{data}->{domain} =~ /imgur.com$/i ) {
+   if ( $post->{data}->{domain} =~ /imgur\.com$/i ) {
       $mirror = mirror_imgur( $imgur, $gfy, $post->{data}->{url} );
-      if ( ! $mirror ) {
-         next;
-      }
+   } elsif ( $post->{data}->{domain} =~ /tumblr\.com$/i ) {
+      $mirror = mirror_tumblr( $tumblr, $imgur, $post->{data}->{url} );
    } else {
       $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
    }
@@ -607,17 +828,23 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
 
    # Make list of mirror links
    my @links;
-   if ( $mirror->{data} and $mirror->{data}->{id} ) {
-      push @links, "[Imgur mirror](http://imgur.com/" . $mirror->{data}->{id} . ")";
+   if ( $mirror->{links} ) {
+      push @links, @{$mirror->{links}};
    }
-   if ( $mirror->{gfy} and $mirror->{gfy}->{gfyname} ) {
-      push @links, "[Gfycat mirror](http://gfycat.com/" . $mirror->{gfy}->{gfyname} . ")";
+   if ( $mirror->{gfy} and $mirror->{gfy}->{links} ) {
+      push @links, @{$mirror->{gfy}->{links}};
    }
 
    # Make comment in submission post
    if ( ! make_reddit_comment( $reddit, $post->{data}->{name}, @links ) ) {
       # Don't leave the now useless mirror up
-      delete_imgur_mirror( $imgur, $mirror->{data}->{deletehash} );
+      if ( $mirror->{data}->{deletehash} ) {
+         if ( $mirror->{data}->{tumblr} ) {
+            delete_imgur_album( $imgur, $mirror->{data}->{deletehash} );
+         } else {
+            delete_imgur_mirror( $imgur, $mirror->{data}->{deletehash} );
+         }
+      }
       $errors = 1;
       next;
    }

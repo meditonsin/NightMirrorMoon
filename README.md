@@ -1,7 +1,13 @@
 NightMirrorMoon
 ===============
 
-Make imgur mirrors for Deviantart submissions on reddit.
+Make mirrors of
+
+ * Deviantart to imgur
+ * Tumblr to imgur
+ * GIFs from Deviantart and imgur to Gfycat
+
+on Reddit.
 
 
 How to use
@@ -18,14 +24,22 @@ info.](http://www.reddit.com/r/help/wiki/faq#wiki_why_am_i_being_told_.22you.27r
 Make an imgur account and [register](http://api.imgur.com/#register) the
 bot. Put the App-ID you get from there into the `$imgur_appid` variable.
 
+Make a tumblr account and [register](http://www.tumblr.com/oauth/apps)
+the bot. Put the API key into the `$tumblr_api_key` variable.
+
 Not strictly necessary, but probably for the best, is to change
 the user agent string of the `REST::Client` instance that does
 calls to reddit to something of your own.  [See here for more
-info.](https://github.com/reddit/reddit/wiki/API)
+info.](https://github.com/reddit/reddit/wiki/API) This can be set in the
+`$useragent` variable for everything.
 
 There's also the option to only mirror content that is tagged as mature,
 to allow people without DA accounts to see it. Set `$mature_only` to
 `1` for that.
+
+When the bot encounters an error while creating a mirror or deleting an
+unused one (because it encountered an error elsewhere), it will retry
+at most `$max_retries` times, with a five second delay between each try.
 
 
 Limitations
@@ -41,3 +55,14 @@ imgur compresses anything over a certain size anyway.
 
 It also doesn't return GIFs for some reason, only still images (PNG or
 whatever), which means GIFs won't be mirrored correctly.
+
+GIFs from tumblr are currently not mirrored to Gfycat.
+
+
+TODO
+----
+
+Error handling is a mess. I will need to implement a way to make a
+better distinction between non-errors (like encountering flash on DA,
+or an image being too big for imgur) and actual errors (mostly any of
+the sites being over capacity and stuff).
