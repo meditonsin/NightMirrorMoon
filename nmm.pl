@@ -78,7 +78,6 @@ my $reddit_password = "secret";
 my $subreddit = "mylittlepony";
 
 
-
 #
 # Prevent multiple instances from running at the same time
 #
@@ -199,6 +198,15 @@ sub log_error {
 }
 
 #
+# Log an error message, then die with it
+#
+sub raise_error {
+   my $message = shift;
+   log_error( $message );
+   croak $message;
+}
+
+#
 # Go through $logfile to see if we already posted on a link.
 # When reddit is under load, we sometimes get unreliable data,
 # which ends in double posts.
@@ -280,8 +288,7 @@ sub get_tumblr {
 
    $r->request( "GET", "/blog/$blog_name/posts?api_key=$tumblr_api_key&id=$post_id&filter=raw" );
    if ( $r->responseCode != 200 ) {
-      log_error( "get_tumblr(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
-      return undef;
+      raise_error( "get_tumblr(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
    }
 
    my $post = parse_json( $r->responseContent );
@@ -346,8 +353,11 @@ sub get_da {
 
       return $response;
    }
-   log_error( "get_da(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
-   return undef;
+   elsif ( $r->responseCode == 404 ) {
+      log_error( "get_da(): Couldn't fetch $dalink; Got HTTP " . $r->responseCode );
+      return undef;
+   }
+   raise_error( "get_da(): Couldn't fetch $dalink; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -412,8 +422,12 @@ sub get_imgur {
       }
       return parse_json( $r->responseContent );
    }
+   elsif ( $r->responseCode == 404 ) {
+      log_error( "get_imgur(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
+      return undef;
+   }
 
-   return undef;
+   raise_error( "get_imgur(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -439,11 +453,11 @@ sub make_gfy_mirror {
 
    if ( $retries < $max_retries ) {
       sleep( 5 );
+      log_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode . "; Retrying for the ".($retries+1)." time" );
       return make_gfy_mirror( $r, $gif_url, $retries + 1 );
    }
 
-   log_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode );
-   return undef;
+   raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -469,7 +483,7 @@ sub make_imgur_mirror {
       if ( $response->{data}->{error} =~ /^Image is larger than / or
            $response->{data}->{error} =~ /^Animated GIF is larger than / ) {
          log_error( "make_imgur_mirror(): Didn't mirror $url; TOO_LARGE" );
-         return $response;
+         return undef;
       }
    }
 
@@ -479,8 +493,7 @@ sub make_imgur_mirror {
       return $response;
    }
 
-   log_error( "make_imgur_mirror(): Failed to mirror $url; Got HTTP " . $r->responseCode );
-   return undef;
+   raise_error( "make_imgur_mirror(): Failed to mirror $url; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -504,16 +517,14 @@ sub make_imgur_album {
       my $album = parse_json( $r->responseContent );
 
       if ( ! $album->{data}->{deletehash} ) {
-         print STDERR "make_imgur_album():\n";
-         print STDERR JSON->new->pretty->encode( $album );
-         die "\n";
+         raise_error( "make_imgur_album(): Malformed album (no deletehash)" );
       }
+
       foreach my $img ( @images ) {
          my $mirror = make_imgur_mirror( $r, $img, '', '', $album->{data}->{deletehash} );
          if ( ! $mirror ) {
-            log_error( "make_imgur_album(): Couldn't mirror $img; undef" );
             delete_imgur_album( $r, $album->{data}->{deletehash} );
-            return undef;
+            raise_error( "make_imgur_album(): Couldn't mirror $img; undef" );
          }
          if ( $mirror->{data}->{error} and (
                $mirror->{data}->{error} =~ /^Image is larger than / or
@@ -527,6 +538,8 @@ sub make_imgur_album {
       push @{$album->{links}}, '[Imgur mirror](http://imgur.com/a/' . $album->{data}->{id} . ')';
       return $album;
    }
+
+   raise_error( "make_imgur_album(): Failed to mirror ".join(',',@images)."; Got HTTP " . $r->responseCode );
 }
 
 #
@@ -651,6 +664,7 @@ sub delete_imgur_mirror {
 
    if ( $retries < $max_retries ) {
       sleep( 5 );
+      log_error( "delete_imgur_mirror(): Failed to remove image $dhash; Got HTTP " . $r->responseCode . "; Retrying for the ".($retries+1)." time" );
       return delete_imgur_mirror( $r, $dhash, $retries + 1 );
    }
 
@@ -673,6 +687,7 @@ sub delete_imgur_album {
 
    if ( $retries < $max_retries ) {
       sleep( 5 );
+      log_error( "delete_imgur_album(): Failed to remove album $dhash; Got HTTP " . $r->responseCode . "; Retrying for the ".($retries+1)." time" );
       return delete_imgur_album( $r, $dhash, $retries + 1 );
    }
 
@@ -697,13 +712,11 @@ sub make_reddit_comment {
       my $login_query = "user=$reddit_account&passwd=$reddit_password&rem=false&api_type=json";
       $r->request( "POST", "/api/login?$login_query" );
       if ( $r->responseCode != 200 ) {
-         log_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $r->responseCode );
-         return undef;
+         raise_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $r->responseCode );
       }
       $response = parse_json( $r->responseContent );
       if ( ! $response->{json}->{data} ) {
-         log_error( "make_reddit_comment(): Failed to parse login response" );
-         return undef;
+         raise_error( "make_reddit_comment(): Failed to parse login response" );
       }
 
       # Modhash is required for write operations
@@ -719,12 +732,14 @@ sub make_reddit_comment {
    my $comment_query = "text=$comment_text&thing_id=$post&api_type=json";
    $r->request( "POST", "/api/comment?$comment_query" );
    if ( $r->responseCode != 200 ) {
-      log_error( "make_reddit_comment(): Failed post comment; Got HTTP " . $r->responseCode );
-      return undef;
+      raise_error( "make_reddit_comment(): Failed to post comment; Got HTTP " . $r->responseCode );
    }
    $response = parse_json( $r->responseContent );
    if ( ! $response->{json}->{data} ) {
-      log_error( "make_reddit_comment(): Failed post comment; Got Reddit response: " . $response->{json}->{errors}->[0]->[0] );
+      if ( $response->{json}->{errors}->[0]->[0] ne 'DELETED_LINK' ) {
+         print "Reddit error: ".$response->{json}->{errors}->[0]->[0]."\n";
+         raise_error( "make_reddit_comment(): Failed to post comment; Got Reddit response: " . $response->{json}->{errors}->[0]->[0] );
+      }
       return undef;
    }
 
@@ -804,27 +819,18 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
 
    # Make a mirror
    my $mirror;
-   if ( $post->{data}->{domain} =~ /imgur\.com$/i ) {
-      $mirror = mirror_imgur( $imgur, $gfy, $post->{data}->{url} );
-   } elsif ( $post->{data}->{domain} =~ /tumblr\.com$/i ) {
-      $mirror = mirror_tumblr( $tumblr, $imgur, $post->{data}->{url} );
-   } else {
-      $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
-   }
-
-   if ( ! $mirror ) { 
+   eval {
+      if ( $post->{data}->{domain} =~ /imgur\.com$/i ) {
+         $mirror = mirror_imgur( $imgur, $gfy, $post->{data}->{url} );
+      } elsif ( $post->{data}->{domain} =~ /tumblr\.com$/i ) {
+         $mirror = mirror_tumblr( $tumblr, $imgur, $post->{data}->{url} );
+      } else {
+         $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
+      }
+   } or do {
       $errors = 1;
       next;
-   }
-   if ( $mirror->{data} and $mirror->{data}->{error} and (
-           $mirror->{data}->{error} =~ /^Image is larger than / or
-           $mirror->{data}->{error} =~ /^Animated GIF is larger than /
-        )
-   ) {
-      if ( ! $mirror->{gfy} ) {
-         next;
-      }
-   }
+   };
 
    # Make list of mirror links
    my @links;
@@ -835,8 +841,18 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       push @links, @{$mirror->{gfy}->{links}};
    }
 
+   if ( ! @links ) {
+      next;
+   }
+
    # Make comment in submission post
-   if ( ! make_reddit_comment( $reddit, $post->{data}->{name}, @links ) ) {
+   my $reddit_comment;
+   eval {
+      $reddit_comment = make_reddit_comment( $reddit, $post->{data}->{name}, @links );
+   } or do {
+      $errors = 1;
+   };
+   if ( ! $reddit_comment ) {
       # Don't leave the now useless mirror up
       if ( $mirror->{data}->{deletehash} ) {
          if ( $mirror->{data}->{tumblr} ) {
@@ -845,7 +861,6 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
             delete_imgur_mirror( $imgur, $mirror->{data}->{deletehash} );
          }
       }
-      $errors = 1;
       next;
    }
 
