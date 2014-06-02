@@ -38,7 +38,8 @@ use Carp;
 my @ignore_artists = (
    'FallenZephyr',
    'Kalyandra',
-   'RabbitTales'
+   'RabbitTales',
+   'esuka'
 );
 
 #
@@ -357,6 +358,9 @@ sub get_da {
       log_error( "get_da(): Couldn't fetch $dalink; Got HTTP " . $r->responseCode );
       return undef;
    }
+   elsif ( $r->responseCode == 302 ) {
+      return get_da( $r, $r->responseHeader( 'location' ) );
+   }
    raise_error( "get_da(): Couldn't fetch $dalink; Got HTTP " . $r->responseCode );
 }
 
@@ -447,6 +451,10 @@ sub make_gfy_mirror {
 
    if ( $r->responseCode == 200 ) {
       my $response = parse_json( $r->responseContent );
+      if ( ! $response->{gfyname} ) {
+         print STDERR to_json( $response );
+         raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; No gfyname" );
+      }
       push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
       return $response;
    }
