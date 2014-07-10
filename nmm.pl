@@ -451,6 +451,11 @@ sub make_gfy_mirror {
 
    if ( $r->responseCode == 200 ) {
       my $response = parse_json( $r->responseContent );
+      if ( $response->{error} ) {
+         if ( $response->{error} eq "This gif is not animated!" ) {
+            return undef;
+         }
+      }
       if ( ! $response->{gfyname} ) {
          print STDERR to_json( $response );
          raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; No gfyname" );
