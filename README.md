@@ -25,7 +25,7 @@ Make an imgur account and [register](http://api.imgur.com/#register) the
 bot. Put the App-ID you get from there into `imgur_appid`.
 
 Make a tumblr account and [register](http://www.tumblr.com/oauth/apps)
-the bot. Put the API key into `$tumblr_api_key`.
+the bot. Put the API key into `tumblr_api_key`.
 
 Not strictly necessary, but probably for the best, is to change
 the user agent string of the `REST::Client` instance that does
