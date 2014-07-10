@@ -24,6 +24,7 @@
 # THE SOFTWARE.
 
 use strict;
+use File::Basename;
 use Proc::ProcessTable;
 use URI::Escape;
 use REST::Client;
@@ -33,50 +34,49 @@ use JSON;
 use Carp;
 
 #
-# Don't make mirrors of works of these artists
+# Load config file
 #
-my @ignore_artists = (
-   'FallenZephyr',
-   'Kalyandra',
-   'RabbitTales',
-   'esuka'
-);
+my $config_file = dirname($0)."/nmm.conf";
+if ( ! -r $config_file ) {
+   die "No readable $config_file";
+}
+my $conf = do( $config_file );
+if ( ref $conf ne 'HASH' ) {
+   die "Couldn't parse $config_file";
+}
 
 #
-# Don't make mirrors of these tumblr blogs
+# Check required config values
 #
-my @ignore_tumblrs = (
-);
+foreach my $key ( @{[ 'maintainer', 'useragent', 'imgur_appid', 'tumblr_api_key', 'reddit_account', 'reddit_password', 'subreddit' ]} ) {
+   if ( ! defined $conf->{$key} ) {
+      die "Error in $config_file: $key must be defined";
+   }
+}
 
 #
-# Don't mirror posts by these submitters
+# Check optional config arrays
 #
-my @ignore_submitters = (
-   'stabbing_robot'
-);
+foreach my $key ( @{[ 'ignore_artists', 'ignore_tumblrs', 'ignore_submitters' ]} ) {
+   if ( defined $conf->{$key} and ! ref $conf->{$key} eq 'ARRAY' ) {
+      die "Error in $config_file: $key must be an array, when defined";
+   }
+}
 
 #
 # If this is set to 1, the bot will only mirror images that are tagged as mature
-# ( 'rating' attribute of oEmbed)
 #
-my $mature_only = 0;
+if ( ! $conf->{mature_only} ) {
+   $conf->{mature_only} = 0;
+}
 
 #
 # Maxmimum number of retries the bot will make before giving up after
 # encountering an error while creating a mirror
 #
-my $max_retries = 5;
-
-my $maintainer = "meditonsin";
-my $useragent = "NightMirrorMoon/0.1 by $maintainer";
-
-my $imgur_appid = "secret";
-
-my $tumblr_api_key = "secret";
-
-my $reddit_account = "NightMirrorMoon";
-my $reddit_password = "secret";
-my $subreddit = "mylittlepony";
+if ( ! $conf->{max_retries} ) {
+   $conf->{max_retries} = 5;
+}
 
 
 #
@@ -101,22 +101,22 @@ for my $process ( @{$table->table} ) {
 
 my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
 # https://github.com/reddit/reddit/wiki/API
-$reddit->getUseragent->agent( $useragent );
+$reddit->getUseragent->agent( $conf->{useragent} );
 # Need cookies or logins won't last
 $reddit->getUseragent->cookie_jar({ file => "/tmp/cookies.txt" });
 
 my $deviantart = REST::Client->new( { host => "http://backend.deviantart.com" } );
-$deviantart->getUseragent->agent( $useragent );
+$deviantart->getUseragent->agent( $conf->{useragent} );
 
 my $imgur = REST::Client->new( { host => "https://api.imgur.com" } );
-$imgur->getUseragent->agent( $useragent );
-$imgur->addHeader( "Authorization", "Client-ID $imgur_appid" );
+$imgur->getUseragent->agent( $conf->{useragent} );
+$imgur->addHeader( "Authorization", "Client-ID $conf->{imgur_appid}" );
 
 my $gfy = REST::Client->new( { host => "http://upload.gfycat.com" } );
-$gfy->getUseragent->agent( $useragent );
+$gfy->getUseragent->agent( $conf->{useragent} );
 
 my $tumblr = REST::Client->new( { host => "http://api.tumblr.com/v2" } );
-$tumblr->getUseragent->agent( $useragent );
+$tumblr->getUseragent->agent( $conf->{useragent} );
 
 my $lastrunfile = "$0.lastrun";
 my $logfile = "$0.log";
@@ -287,18 +287,18 @@ sub get_tumblr {
    my $blog_name = $1;
    my $post_id = $2;
 
-   $r->request( "GET", "/blog/$blog_name/posts?api_key=$tumblr_api_key&id=$post_id&filter=raw" );
+   $r->request( "GET", "/blog/$blog_name/posts?api_key=$conf->{tumblr_api_key}&id=$post_id&filter=raw" );
    if ( $r->responseCode != 200 ) {
       raise_error( "get_tumblr(): Couldn't fetch $url; Got HTTP " . $r->responseCode );
    }
 
    my $post = parse_json( $r->responseContent );
    if ( $post->{response}->{total_posts} == 1 and defined $post->{response}->{posts}->[0]->{photos} ) {
-      if ( $mature_only and ( ! $post->{response}->{posts}->[0]->{is_nsfw} ) ) {
+      if ( $conf->{mature_only} and ( ! $post->{response}->{posts}->[0]->{is_nsfw} ) ) {
          return undef;
       }
 
-      foreach my $t ( @ignore_tumblrs ) {
+      foreach my $t ( @{$conf->{ignore_tumblrs}} ) {
          if ( $post->{blog_name} =~ /^\Q$t\E$/i ) {
             return undef;
          }
@@ -328,11 +328,11 @@ sub get_da {
          return undef;
       }
 
-      if ( $mature_only and ( ! $response->{rating} or $response->{rating} ne 'adult' ) ) {
+      if ( $conf->{mature_only} and ( ! $response->{rating} or $response->{rating} ne 'adult' ) ) {
          return undef;
       }
 
-      foreach my $artist ( @ignore_artists ) {
+      foreach my $artist ( @{$conf->{ignore_artists}} ) {
          if ( $response->{author_name} =~ /^\Q$artist\E$/i ) {
             return undef;
          }
@@ -464,7 +464,7 @@ sub make_gfy_mirror {
       return $response;
    }
 
-   if ( $retries < $max_retries ) {
+   if ( $retries < $conf->{max_retries} ) {
       sleep( 5 );
       log_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode . "; Retrying for the ".($retries+1)." time" );
       return make_gfy_mirror( $r, $gif_url, $retries + 1 );
@@ -579,7 +579,7 @@ sub mirror_tumblr {
    my $mirror = make_imgur_album(
       $imgur,
       $post->{blog_name} || '-',
-      "These images were reuploaded by a bot on reddit.com/r/$subreddit from tumblr. The original can be found here: $post->{post_url}",
+      "These images were reuploaded by a bot on reddit.com/r/$conf->{subreddit} from tumblr. The original can be found here: $post->{post_url}",
       @photos
    );
 
@@ -613,7 +613,7 @@ sub mirror_da {
       $r,
       $da_image->{url},
       "$da_image->{title} by $da_image->{author_name}",
-      "This image was reuploaded by a bot on reddit.com/r/$subreddit from Deviantart. The original can be found here: $da_link"
+      "This image was reuploaded by a bot on reddit.com/r/$conf->{subreddit} from Deviantart. The original can be found here: $da_link"
    );
 
    if ( $mirror or $gfy_mirror ) {
@@ -643,7 +643,7 @@ sub mirror_imgur {
       return undef;
    }
 
-   if ( $mature_only and ( ! $imgur_image->{data}->{nsfw} ) ) {
+   if ( $conf->{mature_only} and ( ! $imgur_image->{data}->{nsfw} ) ) {
       return undef;
    }
 
@@ -675,7 +675,7 @@ sub delete_imgur_mirror {
       return 1;
    }
 
-   if ( $retries < $max_retries ) {
+   if ( $retries < $conf->{max_retries} ) {
       sleep( 5 );
       log_error( "delete_imgur_mirror(): Failed to remove image $dhash; Got HTTP " . $r->responseCode . "; Retrying for the ".($retries+1)." time" );
       return delete_imgur_mirror( $r, $dhash, $retries + 1 );
@@ -698,7 +698,7 @@ sub delete_imgur_album {
       return 1;
    }
 
-   if ( $retries < $max_retries ) {
+   if ( $retries < $conf->{max_retries} ) {
       sleep( 5 );
       log_error( "delete_imgur_album(): Failed to remove album $dhash; Got HTTP " . $r->responseCode . "; Retrying for the ".($retries+1)." time" );
       return delete_imgur_album( $r, $dhash, $retries + 1 );
@@ -722,7 +722,7 @@ sub make_reddit_comment {
    # (only do it once)
    #
    if ( ! $r->{_headers}{'X-Modhash'} ) {
-      my $login_query = "user=$reddit_account&passwd=$reddit_password&rem=false&api_type=json";
+      my $login_query = "user=$conf->{reddit_account}&passwd=$conf->{reddit_password}&rem=false&api_type=json";
       $r->request( "POST", "/api/login?$login_query" );
       if ( $r->responseCode != 200 ) {
          raise_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $r->responseCode );
@@ -741,7 +741,7 @@ sub make_reddit_comment {
    # Post comment with mirror link
    #
    my $links = join( "  \n", @links );
-   my $comment_text = uri_escape( "[](/nmm)$links  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to=$maintainer&subject=$reddit_account)^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)" );
+   my $comment_text = uri_escape( "[](/nmm)$links  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to=$conf->{maintainer}&subject=$conf->{reddit_account})^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)" );
    my $comment_query = "text=$comment_text&thing_id=$post&api_type=json";
    $r->request( "POST", "/api/comment?$comment_query" );
    if ( $r->responseCode != 200 ) {
@@ -782,7 +782,7 @@ my $lastrun = get_lastrun();
 # so we can try again on the posts that didn't work out
 my $errors = 0;
 
-my $posts = get_reddit( $reddit, "/r/$subreddit/new/.json" );
+my $posts = get_reddit( $reddit, "/r/$conf->{subreddit}/new/.json" );
 my $now = time();
 if ( ! $posts ) {
    exit;
@@ -797,7 +797,7 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    #
    # Skip posts by certain reddit users
    #
-   foreach my $submitter ( @ignore_submitters ) {
+   foreach my $submitter ( @{$conf->{ignore_submitters}} ) {
       if ( $post->{data}->{author} =~ /^\Q$submitter\E$/i ) {
          log_error( "main(): Skipped reddit user $post->{data}->{author}\@$post->{data}->{permalink}" );
          return next;
@@ -809,7 +809,7 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       next;
    }
 
-   # Skip posts $reddit_account already commented on
+   # Skip posts $conf->{reddit_account} already commented on
    # (only check top level comments)
    my $did_it = 0;
    my $comments = get_reddit( $reddit, $post->{data}->{permalink}.".json" );
@@ -818,7 +818,7 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       next;
    }
    foreach my $comment ( @{$comments->[1]->{data}->{children}} ) {
-      if ( $comment->{data}->{author} =~ /^\Q$reddit_account\E$/i ) {
+      if ( $comment->{data}->{author} =~ /^\Q$conf->{reddit_account}\E$/i ) {
          $did_it = 1;
          last;
       }

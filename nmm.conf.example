@@ -1,0 +1,38 @@
+{
+   # Don't make mirrors of works of these DA artists
+   ignore_artists    => [
+   ],
+
+   # Don't make mirrors of these tumblr blogs
+   ignore_tumblrs    => [
+   ],
+   
+   # Don't mirror posts by these submitters
+   ignore_submitters => [
+   ],
+
+   # Only mirror images that are flagged mature
+   mature_only       => 0,
+
+   # Maximum number of retries for creating a mirror
+   max_retries       => 5,
+
+   # https://github.com/reddit/reddit/wiki/API#rules
+   maintainer        => 'yournamehere',
+   useragent         => 'NightMirrorMoon/0.1 by yournamehere',
+
+   # Required to make imgur mirrors
+   # https://api.imgur.com/#register
+   imgur_appid       => '',
+
+   # Required to mirror tumblr images
+   # http://www.tumblr.com/oauth/apps
+   tumblr_api_key    => '',
+
+   # The reddit account the bot posts as
+   reddit_account    => '',
+   reddit_password   => '',
+
+   # Subreddit to operate in
+   subreddit         => ''
+}

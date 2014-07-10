@@ -13,33 +13,33 @@ on Reddit.
 How to use
 ----------
 
-Put the subreddit the bot will work in the `$subreddit` variable.
+Copy or rename `nmm.conf.example` to `nmm.conf` and fill in the values.
 
-Make a reddit account and put the credentials into the `$reddit_account`
-and `$reddit_password` variables. The account might need some karma in
+Make a reddit account and put the credentials into the `reddit_account`
+and `reddit_password` keys. The account might need some karma in
 the subreddit it's supposed to work in and ideally a verified email
 address, to get around reddit's rate limiting.  ([See here for more
 info.](http://www.reddit.com/r/help/wiki/faq#wiki_why_am_i_being_told_.22you.27re_doing_that_too_much....22_i.27ve_been_here_for_years.21))
 
 Make an imgur account and [register](http://api.imgur.com/#register) the
-bot. Put the App-ID you get from there into the `$imgur_appid` variable.
+bot. Put the App-ID you get from there into `imgur_appid`.
 
 Make a tumblr account and [register](http://www.tumblr.com/oauth/apps)
-the bot. Put the API key into the `$tumblr_api_key` variable.
+the bot. Put the API key into `$tumblr_api_key`.
 
 Not strictly necessary, but probably for the best, is to change
 the user agent string of the `REST::Client` instance that does
 calls to reddit to something of your own.  [See here for more
 info.](https://github.com/reddit/reddit/wiki/API) This can be set in the
-`$useragent` variable for everything.
+`useragent` key.
 
 There's also the option to only mirror content that is tagged as mature,
-to allow people without DA accounts to see it. Set `$mature_only` to
+to allow people without DA accounts to see it. Set `mature_only` to
 `1` for that.
 
 When the bot encounters an error while creating a mirror or deleting an
 unused one (because it encountered an error elsewhere), it will retry
-at most `$max_retries` times, with a five second delay between each try.
+at most `max_retries` times, with a five second delay between each try.
 
 
 Limitations
@@ -57,12 +57,3 @@ It also doesn't return GIFs for some reason, only still images (PNG or
 whatever), which means GIFs won't be mirrored correctly.
 
 GIFs from tumblr are currently not mirrored to Gfycat.
-
-
-TODO
-----
-
-Error handling is a mess. I will need to implement a way to make a
-better distinction between non-errors (like encountering flash on DA,
-or an image being too big for imgur) and actual errors (mostly any of
-the sites being over capacity and stuff).
