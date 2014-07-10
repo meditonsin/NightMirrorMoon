@@ -25,7 +25,7 @@
 
 use strict;
 use File::Basename;
-use Proc::ProcessTable;
+use File::Pid;
 use URI::Escape;
 use REST::Client;
 use LWP::Simple;
@@ -64,6 +64,13 @@ foreach my $key ( @{[ 'ignore_artists', 'ignore_tumblrs', 'ignore_submitters' ]}
 }
 
 #
+# Determine pid file path
+#
+if ( ! $conf->{pid_file} ) {
+   $conf->{pid_file} = dirname($0)."/nmm.pid";
+}
+
+#
 # If this is set to 1, the bot will only mirror images that are tagged as mature
 #
 if ( ! $conf->{mature_only} ) {
@@ -82,22 +89,25 @@ if ( ! $conf->{max_retries} ) {
 #
 # Prevent multiple instances from running at the same time
 #
-my $count = 0;
-my $table = Proc::ProcessTable->new;
-for my $process ( @{$table->table} ) {
-   if ( ! $process->{cmndline} ) {
-      next;
-   }
-   if ( $process->{cmndline} =~ /$0/ ) {
-      if ( $process->{cmndline} !~ /\/bin\/sh/ ) {
-         $count++;
-      }
-      if ( $count > 1 ) {
-         print "Already running!\n";
-         exit;
-      }
-   }
+my $pidfile = File::Pid->new({
+   file => $conf->{pid_file}
+});
+
+if ( $pidfile->running ) {
+   die "Already running";
 }
+
+if ( ! $pidfile->write ) {
+   die "Error creating PID file $conf->{pid_file}";
+}
+
+END {
+   $pidfile->remove or die "Error removing PID file $conf->{pid_file}";
+}
+
+#
+# Setup web api stuffs
+#
 
 my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
 # https://github.com/reddit/reddit/wiki/API
