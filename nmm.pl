@@ -28,6 +28,7 @@ use File::Basename;
 use File::Pid;
 use URI::Escape;
 use REST::Client;
+use HTTP::Cookies;
 use LWP::Simple;
 use Mojo::DOM;
 use JSON;
@@ -109,11 +110,23 @@ END {
 # Setup web api stuffs
 #
 
+my $cj = HTTP::Cookies->new(
+   file => "/tmp/cookies.txt",
+   autosave => 1
+);
+
 my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
 # https://github.com/reddit/reddit/wiki/API
 $reddit->getUseragent->agent( $conf->{useragent} );
 # Need cookies or logins won't last
-$reddit->getUseragent->cookie_jar({ file => "/tmp/cookies.txt" });
+$reddit->getUseragent->cookie_jar( $cj );
+
+# For logins
+my $reddits = REST::Client->new( { host => "https://ssl.reddit.com" } );
+# https://github.com/reddit/reddit/wiki/API
+$reddits->getUseragent->agent( $conf->{useragent} );
+# Need cookies or logins won't last
+$reddits->getUseragent->cookie_jar( $cj );
 
 my $deviantart = REST::Client->new( { host => "http://backend.deviantart.com" } );
 $deviantart->getUseragent->agent( $conf->{useragent} );
@@ -722,6 +735,7 @@ sub delete_imgur_album {
 #
 sub make_reddit_comment {
    my $r = shift;
+   my $rs = shift;
    my $post = shift;
    my @links = @_;
 
@@ -733,11 +747,11 @@ sub make_reddit_comment {
    #
    if ( ! $r->{_headers}{'X-Modhash'} ) {
       my $login_query = "user=$conf->{reddit_account}&passwd=$conf->{reddit_password}&rem=false&api_type=json";
-      $r->request( "POST", "/api/login?$login_query" );
-      if ( $r->responseCode != 200 ) {
-         raise_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $r->responseCode );
+      $rs->request( "POST", "/api/login?$login_query" );
+      if ( $rs->responseCode != 200 ) {
+         raise_error( "make_reddit_comment(): Failed to log in; Got HTTP " . $rs->responseCode );
       }
-      $response = parse_json( $r->responseContent );
+      $response = parse_json( $rs->responseContent );
       if ( ! $response->{json}->{data} ) {
          raise_error( "make_reddit_comment(): Failed to parse login response" );
       }
@@ -871,7 +885,7 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
    # Make comment in submission post
    my $reddit_comment;
    eval {
-      $reddit_comment = make_reddit_comment( $reddit, $post->{data}->{name}, @links );
+      $reddit_comment = make_reddit_comment( $reddit, $reddits, $post->{data}->{name}, @links );
    } or do {
       $errors = 1;
    };
