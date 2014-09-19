@@ -410,7 +410,8 @@ sub get_da_scrape {
    # Check if this is a flash animation
    # We don't need a mirror of the preview
    my $is_flash = $dom->at( 'iframe[class~=flashtime]' );
-   if ( $is_flash ) {
+   my $is_madefire = $dom->at( 'iframe[class~=madefire-player]' );
+   if ( $is_flash or $is_madefire ) {
       log_error( "get_da_scrape(): Won't fetch $dalink; FLASH" );
       return "FLASH";
    }
