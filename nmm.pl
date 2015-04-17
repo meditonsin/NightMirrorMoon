@@ -138,6 +138,9 @@ $imgur->addHeader( "Authorization", "Client-ID $conf->{imgur_appid}" );
 my $gfy = REST::Client->new( { host => "http://upload.gfycat.com" } );
 $gfy->getUseragent->agent( $conf->{useragent} );
 
+my $gfy_verify = REST::Client->new( { host => "http://gfycat.com" } );
+$gfy_verify->getUseragent->agent( $conf->{useragent} );
+
 my $tumblr = REST::Client->new( { host => "http://api.tumblr.com/v2" } );
 $tumblr->getUseragent->agent( $conf->{useragent} );
 
@@ -481,10 +484,17 @@ sub make_gfy_mirror {
          if ( $response->{error} eq "This gif is not animated!" ) {
             return undef;
          }
+         if ( $response->{error} eq "Oops! Does not appear to be a valid GIF or Video" ) {
+            return undef;
+         }
       }
       if ( ! $response->{gfyname} ) {
          print STDERR to_json( $response );
          raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; No gfyname" );
+      }
+      if ( ! verify_gfy_mirror( $gfy_verify, $gif_url, $response->{gfyname} ) ) {
+         print STDERR "make_gfy_mirror(): Returned a random animation...";
+         # TODO: Retry
       }
       push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
       return $response;
@@ -498,6 +508,31 @@ sub make_gfy_mirror {
 
    raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; Got HTTP " . $r->responseCode );
 }
+
+#
+# Verify a gfy mirror
+#
+sub verify_gfy_mirror {
+   my $r = shift;
+   my $gif_url = shift;
+   my $gfyname = shift;
+   my $url = uri_escape( $gif_url );
+
+   $r->request( "GET", "/cajax/get/$gfyname");
+
+   if ( $r->responseCode == 200 ) {
+      my $response = parse_json( $r->responseContent );
+      if ( $response->{gfyItem}->{url} ne $url ) {
+         log_error( "verify_gfy_mirror(): Gfy mirror source doesn't match original URL: $response->{url} != $url" );
+         return 0;
+      } else {
+         return 1;
+      }
+   } else {
+      raise_error( "verify_gfy_mirror(): Got HTTP " . $r->responseCode )
+   }
+}
+
 
 #
 # Make imgur mirror
