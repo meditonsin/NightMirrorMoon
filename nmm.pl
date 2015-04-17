@@ -238,45 +238,47 @@ sub raise_error {
 sub post_in_log {
    my $check_link = shift;
 
-   if ( ! -f $logfile ) {
-      return 0;
-   }
-
    # Check imgur mirrors
-   open( LOG, "<", $logfile ) or die "Can't open $logfile: $!";
-   while ( my $line = <LOG> ) {
-      chomp( $line );
-      my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link, $artist ) = split( / /, $line );
-      if ( $check_link eq $reddit_link ) {
-         close( LOG );
-         return 1;
+   if ( ! -f $logfile ) {
+      open( LOG, "<", $logfile ) or die "Can't open $logfile: $!";
+      while ( my $line = <LOG> ) {
+         chomp( $line );
+         my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link, $artist ) = split( / /, $line );
+         if ( $check_link eq $reddit_link ) {
+            close( LOG );
+            return 1;
+         }
       }
+      close( LOG );
    }
-   close( LOG );
 
    # Check gfy mirrors
-   open( GFYLOG, "<", $gfy_logfile ) or die "Can't open $gfy_logfile: $!";
-   while ( my $line = <GFYLOG> ) {
-      chomp( $line );
-      my ( $date, $time, $gfyname, $reddit_link, $artist ) = split( / /, $line );
-      if ( $check_link eq $reddit_link ) {
-         close( GFYLOG );
-         return 1;
+   if ( ! -f $gfy_logfile ) {
+      open( GFYLOG, "<", $gfy_logfile ) or die "Can't open $gfy_logfile: $!";
+      while ( my $line = <GFYLOG> ) {
+         chomp( $line );
+         my ( $date, $time, $gfyname, $reddit_link, $artist ) = split( / /, $line );
+         if ( $check_link eq $reddit_link ) {
+            close( GFYLOG );
+            return 1;
+         }
       }
+      close( GFYLOG );
    }
-   close( GFYLOG );
 
    # Check imgur albums
-   open( TLOG, "<", $tumblr_logfile ) or die "Can't open $tumblr_logfile: $!";
-   while ( my $line = <TLOG> ) {
-      chomp( $line );
-      my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link, $artist ) = split( / /, $line );
-      if ( $check_link eq $reddit_link ) {
-         close( TLOG );
-         return 1;
+   if ( ! -f $tumblr_logfile ) {
+      open( TLOG, "<", $tumblr_logfile ) or die "Can't open $tumblr_logfile: $!";
+      while ( my $line = <TLOG> ) {
+         chomp( $line );
+         my ( $date, $time, $imgur_id, $imgur_delhash, $reddit_link, $artist ) = split( / /, $line );
+         if ( $check_link eq $reddit_link ) {
+            close( TLOG );
+            return 1;
+         }
       }
+      close( TLOG );
    }
-   close( TLOG );
 
    return 0;
 }
