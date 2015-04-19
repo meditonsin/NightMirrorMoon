@@ -516,14 +516,13 @@ sub verify_gfy_mirror {
    my $r = shift;
    my $gif_url = shift;
    my $gfyname = shift;
-   my $url = uri_escape( $gif_url );
 
    $r->request( "GET", "/cajax/get/$gfyname");
 
    if ( $r->responseCode == 200 ) {
       my $response = parse_json( $r->responseContent );
-      if ( $response->{gfyItem}->{url} ne $url ) {
-         log_error( "verify_gfy_mirror(): Gfy mirror source doesn't match original URL: $response->{url} != $url" );
+      if ( $response->{gfyItem}->{url} ne $gif_url ) {
+         log_error( "verify_gfy_mirror(): Gfy mirror source doesn't match original URL: $response->{gfyItem}->{url} != $url" );
          return 0;
       } else {
          return 1;
