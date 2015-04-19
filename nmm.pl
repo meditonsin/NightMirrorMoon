@@ -242,7 +242,7 @@ sub post_in_log {
    my $check_link = shift;
 
    # Check imgur mirrors
-   if ( ! -f $logfile ) {
+   if ( -f $logfile ) {
       open( LOG, "<", $logfile ) or die "Can't open $logfile: $!";
       while ( my $line = <LOG> ) {
          chomp( $line );
@@ -256,7 +256,7 @@ sub post_in_log {
    }
 
    # Check gfy mirrors
-   if ( ! -f $gfy_logfile ) {
+   if ( -f $gfy_logfile ) {
       open( GFYLOG, "<", $gfy_logfile ) or die "Can't open $gfy_logfile: $!";
       while ( my $line = <GFYLOG> ) {
          chomp( $line );
@@ -270,7 +270,7 @@ sub post_in_log {
    }
 
    # Check imgur albums
-   if ( ! -f $tumblr_logfile ) {
+   if ( -f $tumblr_logfile ) {
       open( TLOG, "<", $tumblr_logfile ) or die "Can't open $tumblr_logfile: $!";
       while ( my $line = <TLOG> ) {
          chomp( $line );
