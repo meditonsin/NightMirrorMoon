@@ -33,6 +33,9 @@ use LWP::Simple;
 use Mojo::DOM;
 use JSON;
 use Carp;
+use Digest::MD5 qw(md5_hex);
+use LWP::Simple;
+
 
 #
 # Load config file
@@ -489,15 +492,13 @@ sub make_gfy_mirror {
          }
       }
       if ( ! $response->{gfyname} ) {
-         print STDERR to_json( $response );
+         print STDERR "No gfyname: " . to_json( $response );
          raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; No gfyname" );
       }
       if ( ! verify_gfy_mirror( $gfy_verify, $gif_url, $response->{gfyname} ) ) {
-         print STDERR "make_gfy_mirror(): Returned a random animation...";
-         # TODO: Retry
+         push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
+         return $response;
       }
-      push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
-      return $response;
    }
 
    if ( $retries < $conf->{max_retries} ) {
@@ -516,19 +517,24 @@ sub verify_gfy_mirror {
    my $r = shift;
    my $gif_url = shift;
    my $gfyname = shift;
+   my $url = uri_escape( $gif_url );
 
    $r->request( "GET", "/cajax/get/$gfyname");
 
    if ( $r->responseCode == 200 ) {
       my $response = parse_json( $r->responseContent );
-      if ( $response->{gfyItem}->{url} ne $gif_url ) {
-         log_error( "verify_gfy_mirror(): Gfy mirror source doesn't match original URL: $response->{gfyItem}->{url} != $url" );
+      my $checksum = md5_hex(get($gif_url));
+      if ( ! $response->{gfyItem}->{md5} ) {
+         raise_error( "verify_gfy_mirror(): Got no MD5: " . to_json( $response ) );
+      }
+      if ( $response->{gfyItem}->{md5} and $response->{gfyItem}->{md5} ne $checksum ) {
+         log_error( "verify_gfy_mirror(): Gfy mirror source doesn't match original checksum: $response->{gfyItem}->{url} != $gif_url" );
          return 0;
       } else {
          return 1;
       }
    } else {
-      raise_error( "verify_gfy_mirror(): Got HTTP " . $r->responseCode )
+      raise_error( "verify_gfy_mirror(): Got HTTP " . $r->responseCode );
    }
 }
 
