@@ -118,7 +118,7 @@ my $cj = HTTP::Cookies->new(
    autosave => 1
 );
 
-my $reddit = REST::Client->new( { host => "http://www.reddit.com" } );
+my $reddit = REST::Client->new( { host => "https://www.reddit.com" } );
 # https://github.com/reddit/reddit/wiki/API
 $reddit->getUseragent->agent( $conf->{useragent} );
 # Need cookies or logins won't last
