@@ -498,7 +498,7 @@ sub make_gfy_mirror {
          print STDERR "No gfyname: " . to_json( $response );
          raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; No gfyname" );
       }
-      if ( ! verify_gfy_mirror( $gfy_verify, $gif_url, $response->{gfyname} ) ) {
+      if ( verify_gfy_mirror( $gfy_verify, $gif_url, $response->{gfyname} ) ) {
          push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
          return $response;
       }
