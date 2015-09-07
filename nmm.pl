@@ -899,7 +899,7 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       next;
    }
    foreach my $comment ( @{$comments->[1]->{data}->{children}} ) {
-      if ( $comment->{data}->{author} =~ /^\Q$conf->{reddit_account}\E$/i ) {
+      if ( $comment->{kind} ne 'more' && $comment->{data}->{author} =~ /^\Q$conf->{reddit_account}\E$/i ) {
          $did_it = 1;
          last;
       }
