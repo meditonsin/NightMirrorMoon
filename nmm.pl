@@ -438,7 +438,7 @@ sub get_da_scrape {
       }
    }
 
-   return $fullview->attrs( 'src' );
+   return $fullview->attr( 'src' );
 }
 
 #
