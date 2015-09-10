@@ -97,7 +97,7 @@ my $pidfile = File::Pid->new({
    file => $conf->{pid_file}
 });
 
-if ( $pidfile->running ) {
+if ( -f $conf->{pid_file} and $pidfile->running ) {
    die "Already running";
 }
 
@@ -438,7 +438,7 @@ sub get_da_scrape {
       }
    }
 
-   return $fullview->attrs( 'src' );
+   return $fullview->attr( 'src' );
 }
 
 #
