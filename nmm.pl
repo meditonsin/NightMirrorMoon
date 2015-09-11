@@ -35,6 +35,7 @@ use JSON;
 use Carp;
 use Digest::MD5 qw(md5_hex);
 use LWP::Simple;
+use Text::Template;
 
 
 #
@@ -52,7 +53,7 @@ if ( ref $conf ne 'HASH' ) {
 #
 # Check required config values
 #
-foreach my $key ( @{[ 'maintainer', 'useragent', 'imgur_appid', 'tumblr_api_key', 'reddit_account', 'reddit_password', 'subreddit' ]} ) {
+foreach my $key ( @{[ 'maintainer', 'useragent', 'imgur_appid', 'tumblr_api_key', 'reddit_account', 'reddit_password', 'subreddit', 'comment_emote', 'comment_body' ]} ) {
    if ( ! defined $conf->{$key} ) {
       die "Error in $config_file: $key must be defined";
    }
@@ -88,6 +89,15 @@ if ( ! $conf->{mature_only} ) {
 if ( ! $conf->{max_retries} ) {
    $conf->{max_retries} = 5;
 }
+
+#
+# Create the comment to use from the template in the configuration file
+#
+my $template = Text::Template->new(
+   TYPE => 'STRING',
+   SOURCE => $conf->{comment_body}
+) or die "Couldn't construct comment: $Text::Template::ERROR";
+$conf->{comment_text} = $template->fill_in( HASH => $conf );
 
 
 #
@@ -822,7 +832,7 @@ sub make_reddit_comment {
    # Post comment with mirror link
    #
    my $links = join( "  \n", @links );
-   my $comment_text = uri_escape( "[](/nmm)$links  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to=$conf->{maintainer}&subject=$conf->{reddit_account})^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)" );
+   my $comment_text = uri_escape( "$conf->{comment_emote}$links$conf->{comment_text}" );
    my $comment_query = "text=$comment_text&thing_id=$post&api_type=json";
    $r->request( "POST", "/api/comment?$comment_query" );
    if ( $r->responseCode != 200 ) {

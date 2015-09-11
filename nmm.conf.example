@@ -34,5 +34,12 @@
    reddit_password   => '',
 
    # Subreddit to operate in
-   subreddit         => ''
+   subreddit         => '',
+
+   # Emote and body of comment used
+   # The mirror links are inserted between these
+   # Note that comment_body is a template (metacpan.org/pod/Text::Template)
+   # It can only use these conf variables
+   comment_emote     => '[](/nmm)',
+   comment_body      => "  \n  \n[](/sp)  \n  \n---  \n  \n^(This is a bot | )[^Info](/r/mylittlepony/comments/1lwzub/deviantart_imgur_mirror_bot_nightmirrormoon/)^( | )[^(Report problems)](/message/compose/?to={\$maintainer}&subject={\$reddit_account})^( | )[^(Source code)](https://github.com/meditonsin/NightMirrorMoon)"
 }
