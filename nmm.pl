@@ -642,6 +642,7 @@ sub mirror_tumblr {
    my $r = shift;
    my $imgur = shift;
    my $t_link = shift;
+   my $sub = shift;
 
    my $post = get_tumblr( $r, $t_link );
 
@@ -659,7 +660,7 @@ sub mirror_tumblr {
    my $mirror = make_imgur_album(
       $imgur,
       $post->{blog_name} || '-',
-      "These images were reuploaded by a bot on reddit.com/r/$conf->{subreddit} from tumblr. The original can be found here: $post->{post_url}",
+      "These images were reuploaded by a bot on reddit.com/r/$sub from tumblr. The original can be found here: $post->{post_url}",
       @photos
    );
 
@@ -678,6 +679,7 @@ sub mirror_da {
    my $da = shift;
    my $gfy = shift;
    my $da_link = shift;
+   my $sub = shift;
    my $da_image = get_da( $da, $da_link );
 
    if ( ! $da_image ) {
@@ -693,7 +695,7 @@ sub mirror_da {
       $r,
       $da_image->{url},
       "$da_image->{title} by $da_image->{author_name}",
-      "This image was reuploaded by a bot on reddit.com/r/$conf->{subreddit} from Deviantart. The original can be found here: $da_link"
+      "This image was reuploaded by a bot on reddit.com/r/$sub from Deviantart. The original can be found here: $da_link"
    );
 
    if ( $mirror eq 'TOO_LARGE' ) {
@@ -702,7 +704,7 @@ sub mirror_da {
          $r,
          $da_image->{url},
          "$da_image->{title} by $da_image->{author_name}",
-         "This image was reuploaded by a bot on reddit.com/r/$conf->{subreddit} from Deviantart. The original can be found here: $da_link"
+         "This image was reuploaded by a bot on reddit.com/r/$sub from Deviantart. The original can be found here: $da_link"
       );
    }
 
@@ -927,9 +929,9 @@ foreach my $post ( @{$posts->{data}->{children}} ) {
       if ( $post->{data}->{domain} =~ /imgur\.com$/i ) {
          $mirror = mirror_imgur( $imgur, $gfy, $post->{data}->{url} );
       } elsif ( $post->{data}->{domain} =~ /tumblr\.com$/i ) {
-         $mirror = mirror_tumblr( $tumblr, $imgur, $post->{data}->{url} );
+         $mirror = mirror_tumblr( $tumblr, $imgur, $post->{data}->{url}, $post->{data}->{subreddit} );
       } else {
-         $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url} );
+         $mirror = mirror_da( $imgur, $deviantart, $gfy, $post->{data}->{url}, $post->{data}->{subreddit} );
       }
    } or do {
       $errors = 1;
