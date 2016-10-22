@@ -330,7 +330,7 @@ sub get_tumblr {
       }
 
       foreach my $t ( @{$conf->{ignore_tumblrs}} ) {
-         if ( $post->{blog_name} =~ /^\Q$t\E$/i ) {
+         if ( $post->{response}->{posts}->[0]->{blog_name} =~ /^\Q$t\E$/i ) {
             return undef;
          }
       }
