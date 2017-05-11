@@ -141,20 +141,20 @@ $reddits->getUseragent->agent( $conf->{useragent} );
 # Need cookies or logins won't last
 $reddits->getUseragent->cookie_jar( $cj );
 
-my $deviantart = REST::Client->new( { host => "http://backend.deviantart.com" } );
+my $deviantart = REST::Client->new( { host => "https://backend.deviantart.com" } );
 $deviantart->getUseragent->agent( $conf->{useragent} );
 
 my $imgur = REST::Client->new( { host => "https://api.imgur.com" } );
 $imgur->getUseragent->agent( $conf->{useragent} );
 $imgur->addHeader( "Authorization", "Client-ID $conf->{imgur_appid}" );
 
-my $gfy = REST::Client->new( { host => "http://upload.gfycat.com" } );
+my $gfy = REST::Client->new( { host => "https://upload.gfycat.com" } );
 $gfy->getUseragent->agent( $conf->{useragent} );
 
-my $gfy_verify = REST::Client->new( { host => "http://gfycat.com" } );
+my $gfy_verify = REST::Client->new( { host => "https://gfycat.com" } );
 $gfy_verify->getUseragent->agent( $conf->{useragent} );
 
-my $tumblr = REST::Client->new( { host => "http://api.tumblr.com/v2" } );
+my $tumblr = REST::Client->new( { host => "https://api.tumblr.com/v2" } );
 $tumblr->getUseragent->agent( $conf->{useragent} );
 
 my $lastrunfile = "$0.lastrun";
@@ -509,7 +509,7 @@ sub make_gfy_mirror {
          raise_error( "make_gfy_mirror(): Failed to mirror $gif_url to gfy; No gfyname" );
       }
       if ( verify_gfy_mirror( $gfy_verify, $gif_url, $response->{gfyname} ) ) {
-         push @{$response->{links}}, '[Gfycat mirror](http://gfycat.com/' . $response->{gfyname} . ')';
+         push @{$response->{links}}, '[Gfycat mirror](https://gfycat.com/' . $response->{gfyname} . ')';
          return $response;
       }
    }
@@ -581,7 +581,7 @@ sub make_imgur_mirror {
 
    if ( $r->responseCode == 200 ) {
       my $response = parse_json( $r->responseContent );
-      push @{$response->{links}}, '[Imgur mirror](http://imgur.com/' . $response->{data}->{id} . ')';
+      push @{$response->{links}}, '[Imgur mirror](https://imgur.com/' . $response->{data}->{id} . ')';
       return $response;
    }
 
@@ -628,7 +628,7 @@ sub make_imgur_album {
          }
       }
 
-      push @{$album->{links}}, '[Imgur mirror](http://imgur.com/a/' . $album->{data}->{id} . ')';
+      push @{$album->{links}}, '[Imgur mirror](https://imgur.com/a/' . $album->{data}->{id} . ')';
       return $album;
    }
 
